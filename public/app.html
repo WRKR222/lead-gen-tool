@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chunguza Growth Platform</title>
+<link rel="stylesheet" href="ds.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<style>
+  html, body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); }
+  * { box-sizing: border-box; }
+  a { color: var(--color-accent-300); text-decoration: none; }
+  .page { min-height: 100vh; padding-bottom: 60px;
+    background: radial-gradient(120% 60% at 6% -10%, var(--color-accent-900) 0%, transparent 62%), var(--color-bg); }
+  .wrap { max-width: 1220px; margin: 0 auto; padding-inline: clamp(16px, 4vw, 40px); }
+  .nav { flex-wrap: wrap; row-gap: var(--space-3); padding-block: var(--space-4); justify-content: space-between; }
+  .nav-brand { display: flex; align-items: center; gap: 10px; }
+  .mark { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--color-accent);
+    border-radius: 6px; color: var(--color-accent); font-size: 11px; font-weight: 600; }
+  .navactions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 18px 0 28px; border-bottom: 1px solid var(--color-divider); padding-bottom: 0; }
+  .tab-btn { background: transparent; border: none; color: color-mix(in srgb, var(--color-text) 60%, transparent);
+    font-family: var(--font-heading); font-size: 13.5px; padding: 10px 14px; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab-btn:hover { color: var(--color-text); }
+  .tab-btn.active { color: var(--color-accent-300); border-bottom-color: var(--color-accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .toolbar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .section-title { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-accent-300); margin: 0 0 12px; }
+  .empty { padding: 20px 0; font-size: 14px; color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+  .field { margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > .field { flex: 1 1 160px; }
+  .tablewrap { overflow-x: auto; }
+  .pre { white-space: pre-wrap; font-family: var(--font-body); font-size: 13.5px; line-height: 1.6; background: var(--color-surface); padding: 12px; border-radius: var(--radius-md); }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .msg-user { align-self: flex-end; background: var(--color-accent-800); color: var(--color-accent-100); }
+  .msg-assistant { background: var(--color-surface); }
+  .chatlog { display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto; padding: 4px 2px 12px; }
+  .chatbubble { max-width: 80%; padding: 10px 13px; border-radius: var(--radius-md); font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+  .chatbubble.mine { align-self: flex-end; background: var(--color-accent-800); color: var(--color-accent-100); }
+  .chatbubble.theirs { align-self: flex-start; background: var(--color-surface); }
+  .toolcall { font-size: 12px; color: var(--color-accent-300); margin-top: 4px; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 13.5px; }
+  .kv dt { color: color-mix(in srgb, var(--color-text) 50%, transparent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="nav wrap">
+    <div class="nav-brand">
+      <span class="logo-mark" style="width:22px;height:22px;">
+        <span class="mark" data-logo-fallback>C</span>
+        <canvas data-chunguza-logo="mark" aria-hidden="true"></canvas>
+      </span>
+      <span id="companyLabel">Loading…</span>
+    </div>
+    <div class="navactions">
+      <span class="tag tag-outline" id="userTag"></span>
+      <button class="btn btn-secondary" id="logoutBtn">Log out</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <nav class="tabs" id="tabs">
+      <button class="tab-btn active" data-tab="leads">Leads</button>
+      <button class="tab-btn" data-tab="calls">Calls</button>
+      <button class="tab-btn" data-tab="work">Tasks &amp; Meetings</button>
+      <button class="tab-btn" data-tab="content">Content Studio</button>
+      <button class="tab-btn" data-tab="assistant">AI Assistant</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </nav>
+
+    <!-- LEADS -->
+    <section class="panel active" id="panel-leads">
+      <div class="toolbar">
+        <div class="seg" id="scopeSeg" role="group" aria-label="Search scope"></div>
+        <button class="btn btn-primary" id="discoverBtn">Search prospects</button>
+        <button class="btn btn-secondary" id="refreshLeadsBtn">Refresh</button>
+        <input class="input" id="leadSearchQ" style="width:200px" placeholder="Filter shown leads…" />
+        <span class="tag tag-neutral" id="discoverStatus"></span>
+      </div>
+      <div class="grid2" style="margin-bottom:24px">
+        <div class="card">
+          <div class="card-kicker">Import leads you already have</div>
+          <p class="card-body">Paste CSV: <code>company_name,contact_name,title,email,phone,linkedin_url,country,city,industry,company_size</code></p>
+          <textarea class="input" id="csvText" rows="4" placeholder="company_name,contact_name,title,email..."></textarea>
+          <button class="btn btn-secondary btn-block" id="importBtn">Import CSV</button>
+        </div>
+        <div class="card">
+          <div class="card-kicker">Sources queried on last search</div>
+          <div id="sourcesList" class="card-body">—</div>
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table class="table">
+          <thead><tr><th>Score</th><th>Company</th><th>Contact</th><th>Reach</th><th>Location</th><th>Source</th><th>Status</th><th style="text-align:right">Outcome</th></tr></thead>
+          <tbody id="leadRows"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="leadsEmpty" hidden>No leads yet — run a search above.</p>
+    </section>
+
+    <!-- CALLS -->
+    <section class="panel" id="panel-calls">
+      <div class="grid2">
+        <div>
+          <p class="section-title">Prep a call</p>
+          <div class="field"><label>Lead</label><select class="input" id="callLeadSelect"></select></div>
+          <button class="btn btn-primary" id="genScriptBtn">Generate call script</button>
+          <div id="scriptOut" style="margin-top:14px"></div>
+        </div>
+        <div>
+          <p class="section-title">Log a call</p>
+          <div class="row">
+            <div class="field"><label>Outcome</label>
+              <select class="input" id="callOutcome">
+                <option value="interested">Interested</option><option value="not_interested">Not interested</option>
+                <option value="callback_requested">Callback requested</option><option value="meeting_booked">Meeting booked</option>
+                <option value="no_answer">No answer</option><option value="voicemail">Voicemail</option><option value="wrong_number">Wrong number</option>
+              </select>
+            </div>
+            <div class="field"><label>Duration (sec)</label><input class="input" id="callDuration" type="number" /></div>
+          </div>
+          <div class="field"><label>Notes</label><textarea class="input" id="callNotes" rows="3"></textarea></div>
+          <button class="btn btn-primary" id="logCallBtn">Log call</button>
+        </div>
+      </div>
+      <p class="section-title" style="margin-top:28px">Recent calls</p>
+      <ul class="list" id="callsList"></ul>
+    </section>
+
+    <!-- TASKS & MEETINGS -->
+    <section class="panel" id="panel-work">
+      <div class="grid2">
+        <div>
+          <p class="section-title">Tasks</p>
+          <div class="row">
+            <div class="field" style="flex:2"><input class="input" id="taskTitle" placeholder="Task title" /></div>
+            <div class="field"><input class="input" id="taskDue" type="datetime-local" /></div>
+          </div>
+          <button class="btn btn-secondary" id="addTaskBtn">Add task</button>
+          <ul class="list" id="tasksList" style="margin-top:14px"></ul>
+        </div>
+        <div>
+          <p class="section-title">Meetings</p>
+          <div class="field"><input class="input" id="meetingTitle" placeholder="Meeting title" /></div>
+          <div class="row">
+            <div class="field"><label>Start</label><input class="input" id="meetingStart" type="datetime-local" /></div>
+            <div class="field"><label>End</label><input class="input" id="meetingEnd" type="datetime-local" /></div>
+          </div>
+          <div class="field"><input class="input" id="meetingLocation" placeholder="Location or video link" /></div>
+          <button class="btn btn-secondary" id="addMeetingBtn">Schedule meeting</button>
+          <ul class="list" id="meetingsList" style="margin-top:14px"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTENT STUDIO -->
+    <section class="panel" id="panel-content">
+      <div class="toolbar">
+        <button class="btn btn-secondary" data-gen="sales-pitch">Sales pitch</button>
+        <button class="btn btn-secondary" data-gen="ad-copy">Ad ideas &amp; copy</button>
+        <button class="btn btn-secondary" data-gen="social-plan">Social media plan (14 days)</button>
+      </div>
+      <div class="grid2" style="margin-bottom:20px">
+        <div class="card">
+          <div class="card-kicker">Graphic</div>
+          <textarea class="input" id="graphicPrompt" rows="2" placeholder="Describe the graphic you want…"></textarea>
+          <button class="btn btn-secondary btn-block" id="genGraphicBtn">Generate graphic</button>
+        </div>
+        <div class="card">
+          <div class="card-kicker">Video ad</div>
+          <textarea class="input" id="videoPrompt" rows="2" placeholder="Describe the video ad concept…"></textarea>
+          <button class="btn btn-secondary btn-block" id="genVideoBtn">Generate video ad</button>
+        </div>
+      </div>
+      <div id="contentOut"></div>
+      <p class="section-title" style="margin-top:24px">History</p>
+      <div id="contentHistory" class="list"></div>
+    </section>
+
+    <!-- ASSISTANT -->
+    <section class="panel" id="panel-assistant">
+      <div class="toolbar">
+        <button class="btn btn-secondary" id="runAutonomousBtn">Run assistant now (autonomous)</button>
+      </div>
+      <div class="chatlog" id="chatLog"></div>
+      <div class="row" style="margin-top:10px">
+        <div class="field" style="flex:1"><input class="input" id="chatInput" placeholder="Ask your assistant anything about your leads…" /></div>
+        <button class="btn btn-primary" id="chatSendBtn">Send</button>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="panel" id="panel-settings">
+      <div class="grid2">
+        <div>
+          <p class="section-title">Company</p>
+          <dl class="kv" id="companyKv"></dl>
+          <button class="btn btn-secondary" id="regenBtn" style="margin-top:14px">Regenerate AI profile</button>
+        </div>
+        <div>
+          <p class="section-title">Directions (AI-synthesized profile)</p>
+          <pre class="pre" id="directionsOut" style="max-height:360px;overflow:auto"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="dialog-backdrop" id="backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true">
+    <div class="dialog-title" id="dialogTitle"></div>
+    <div class="dialog-body pre" id="dialogBody"></div>
+    <div class="dialog-actions"><button class="btn btn-secondary" id="dialogClose">Close</button></div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "/js/vendor/three/three.module.js",
+  "three/addons/": "/js/vendor/three/addons/"
+} }
+</script>
+<script type="module" src="/js/logoViewer.js"></script>
+<script src="shared.js"></script>
+<script>
+const auth = requireAuthOrRedirect();
+const el = (id) => document.getElementById(id);
+const SCOPES = [
+  { key: 'nairobi', label: 'Nairobi' }, { key: 'kenya', label: 'Kenya' },
+  { key: 'east_africa', label: 'East Africa' }, { key: 'africa', label: 'Africa' }, { key: 'global', label: 'Global' }
+];
+let scope = 'kenya';
+let leads = [];
+let company = null;
+
+function openDialog(title, body) { el('dialogTitle').textContent = title; el('dialogBody').textContent = body; el('backdrop').hidden = false; }
+el('dialogClose').addEventListener('click', () => el('backdrop').hidden = true);
+el('backdrop').addEventListener('click', (e) => { if (e.target === el('backdrop')) el('backdrop').hidden = true; });
+
+// ---------- Tabs ----------
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn'); if (!btn) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + btn.dataset.tab));
+  if (btn.dataset.tab === 'calls') populateCallLeadSelect();
+  if (btn.dataset.tab === 'assistant') loadChatHistory();
+  if (btn.dataset.tab === 'work') { loadTasks(); loadMeetings(); }
+  if (btn.dataset.tab === 'content') loadContentHistory();
+  if (btn.dataset.tab === 'settings') loadSettings();
+});
+
+el('logoutBtn').addEventListener('click', logout);
+
+// ---------- Bootstrap ----------
+(async function init() {
+  try {
+    const me = await api('/auth/me');
+    company = me.company;
+    el('companyLabel').textContent = me.company.name;
+    el('userTag').textContent = me.user.name + ' · ' + me.user.role;
+  } catch (ex) { console.warn(ex); }
+  renderScopeSeg();
+  loadLeads();
+})();
+
+// ---------- LEADS ----------
+function renderScopeSeg() {
+  el('scopeSeg').innerHTML = SCOPES.map(s => `<label class="seg-opt"><input type="radio" name="scope" value="${s.key}" ${s.key === scope ? 'checked' : ''} />${s.label}</label>`).join('');
+  el('scopeSeg').querySelectorAll('input').forEach(i => i.addEventListener('change', () => { scope = i.value; }));
+}
+
+async function loadLeads() {
+  try {
+    leads = await api('/leads?limit=300');
+    el('leadsEmpty').hidden = leads.length > 0;
+    renderLeads();
+  } catch (ex) { console.warn(ex); }
+}
+
+function renderLeads() {
+  const q = el('leadSearchQ').value.trim().toLowerCase();
+  const rows = leads.filter(l => !q || [l.company_name, l.contact_name, l.city, l.email].some(v => (v || '').toLowerCase().includes(q)))
+    .sort((a, b) => (b.score || 0) - (a.score || 0));
+  el('leadRows').innerHTML = rows.map(l => {
+    const pct = Math.round((l.score || 0) * 100);
+    return `<tr>
+      <td><b>${pct}%</b></td>
+      <td>${escHtml(l.company_name)}<div class="card-meta">${escHtml([l.industry, l.company_size ? l.company_size + ' staff' : null].filter(Boolean).join(' · '))}</div></td>
+      <td>${escHtml(l.contact_name)}<div class="card-meta">${escHtml(l.title)}</div></td>
+      <td>${escHtml(l.email)}<div class="card-meta">${escHtml(l.phone)}</div></td>
+      <td>${escHtml([l.city, l.country].filter(Boolean).join(', '))}</td>
+      <td><span class="tag tag-neutral">${escHtml(l.source)}</span></td>
+      <td>${escHtml(l.status)}</td>
+      <td style="text-align:right">
+        <select class="input outcome" data-id="${l.id}" style="width:140px;display:inline-block">
+          <option value="">Outcome…</option>
+          <option value="replied">Replied</option><option value="meeting_booked">Meeting booked</option>
+          <option value="closed_won">Closed won</option><option value="closed_lost">Closed lost</option>
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+}
+el('leadSearchQ').addEventListener('input', renderLeads);
+el('refreshLeadsBtn').addEventListener('click', loadLeads);
+el('leadRows').addEventListener('change', async (e) => {
+  const s = e.target.closest('select.outcome'); if (!s || !s.value) return;
+  const eventType = s.value; const id = s.dataset.id; s.value = '';
+  try { await api(`/leads/${id}/feedback`, { method: 'POST', body: { eventType } }); loadLeads(); } catch (ex) { alert(ex.message); }
+});
+
+el('discoverBtn').addEventListener('click', async () => {
+  el('discoverStatus').textContent = 'Searching ' + scope.replace('_', ' ') + '…';
+  el('discoverBtn').disabled = true;
+  try {
+    const data = await api('/leads/discover', { method: 'POST', body: { geoScope: scope } });
+    el('discoverStatus').textContent = `${data.leadsFound} leads found · avg ${Math.round((data.avgScore || 0) * 100)}%`;
+    el('sourcesList').textContent = (data.sourcesQueried || []).join(', ') || '—';
+    loadLeads();
+  } catch (ex) { el('discoverStatus').textContent = 'Error: ' + ex.message; }
+  el('discoverBtn').disabled = false;
+});
+
+el('importBtn').addEventListener('click', async () => {
+  const csvText = el('csvText').value.trim();
+  if (!csvText) return;
+  try {
+    const data = await api('/leads/import', { method: 'POST', body: { csvText } });
+    openDialog('Import complete', `Imported ${data.imported} leads.` + (data.errors.length ? '\n\nWarnings:\n' + data.errors.join('\n') : ''));
+    el('csvText').value = '';
+    loadLeads();
+  } catch (ex) { alert(ex.message); }
+});
+
+// ---------- CALLS ----------
+function populateCallLeadSelect() {
+  el('callLeadSelect').innerHTML = leads.slice(0, 100).map(l => `<option value="${l.id}">${escHtml(l.company_name)}${l.contact_name ? ' — ' + escHtml(l.contact_name) : ''}</option>`).join('') || '<option value="">No leads yet</option>';
+}
+let lastScript = null;
+el('genScriptBtn').addEventListener('click', async () => {
+  const leadId = el('callLeadSelect').value; if (!leadId) return;
+  el('scriptOut').innerHTML = '<p class="empty">Generating…</p>';
+  try {
+    lastScript = await api('/calls/script', { method: 'POST', body: { leadId } });
+    el('scriptOut').innerHTML = `
+      <div class="pre"><b>Opener</b><br>${escHtml(lastScript.opener)}</div>
+      <div class="pre" style="margin-top:8px"><b>Discovery questions</b><br>${(lastScript.discoveryQuestions || []).map(escHtml).join('<br>')}</div>
+      <div class="pre" style="margin-top:8px"><b>Value prop</b><br>${escHtml(lastScript.valuePropPitch)}</div>
+      <div class="pre" style="margin-top:8px"><b>Closing ask</b><br>${escHtml(lastScript.closingAsk)}</div>
+      <div class="pre" style="margin-top:8px"><b>Coaching note</b><br>${escHtml(lastScript.coachingNotes)}</div>`;
+  } catch (ex) { el('scriptOut').innerHTML = `<p class="empty">${escHtml(ex.message)}</p>`; }
+});
+
+el('logCallBtn').addEventListener('click', async () => {
+  const leadId = el('callLeadSelect').value; if (!leadId) return alert('Pick a lead first.');
+  try {
+    await api('/calls', { method: 'POST', body: {
+      leadId, outcome: el('callOutcome').value, notes: el('callNotes').value || undefined,
+      durationSeconds: Number(el('callDuration').value) || undefined, script: lastScript || undefined
+    } });
+    el('callNotes').value = ''; el('callDuration').value = '';
+    loadCalls();
+  } catch (ex) { alert(ex.message); }
+});
+
+async function loadCalls() {
+  try {
+    const calls = await api('/calls');
+    el('callsList').innerHTML = calls.slice(0, 20).map(c => `<li class="card"><div class="card-title">${escHtml(c.outcome || c.status)}</div><div class="card-body">${escHtml(c.notes || '')}</div><div class="card-meta">${new Date(c.created_at).toLocaleString()}</div></li>`).join('') || '<p class="empty">No calls logged yet.</p>';
+  } catch (ex) { console.warn(ex); }
+}
+
+// ---------- TASKS & MEETINGS ----------
+el('addTaskBtn').addEventListener('click', async () => {
+  const title = el('taskTitle').value.trim(); if (!title) return;
+  try {
+    await api('/tasks', { method: 'POST', body: { title, dueAt: el('taskDue').value ? new Date(el('taskDue').value).toISOString() : undefined } });
+    el('taskTitle').value = ''; el('taskDue').value = ''; loadTasks();
+  } catch (ex) { alert(ex.message); }
+});
+async function loadTasks() {
+  const tasks = await api('/tasks').catch(() => []);
+  el('tasksList').innerHTML = tasks.map(t => `<li class="card">
+      <div class="card-title">${escHtml(t.title)} ${t.created_by === 'ai_assistant' ? '<span class=\"tag tag-accent\">AI</span>' : ''}</div>
+      <div class="card-meta">${t.due_at ? new Date(t.due_at).toLocaleString() : 'No due date'} · ${escHtml(t.status)}</div>
+      ${t.status === 'open' ? `<button class="btn btn-secondary" data-done="${t.id}" style="align-self:flex-start">Mark done</button>` : ''}
+    </li>`).join('') || '<p class="empty">No tasks yet.</p>';
+}
+el('tasksList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-done]'); if (!b) return;
+  await api(`/tasks/${b.dataset.done}`, { method: 'PATCH', body: { status: 'done' } }).catch(() => {});
+  loadTasks();
+});
+
+el('addMeetingBtn').addEventListener('click', async () => {
+  const title = el('meetingTitle').value.trim();
+  const startAt = el('meetingStart').value, endAt = el('meetingEnd').value;
+  if (!title || !startAt || !endAt) return alert('Title, start and end are required.');
+  try {
+    await api('/meetings', { method: 'POST', body: {
+      title, startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), locationOrLink: el('meetingLocation').value || undefined
+    } });
+    el('meetingTitle').value = ''; el('meetingStart').value = ''; el('meetingEnd').value = ''; el('meetingLocation').value = '';
+    loadMeetings();
+  } catch (ex) { alert(ex.message); }
+});
+async function loadMeetings() {
+  const meetings = await api('/meetings').catch(() => []);
+  el('meetingsList').innerHTML = meetings.map(m => `<li class="card">
+      <div class="card-title">${escHtml(m.title)}</div>
+      <div class="card-meta">${new Date(m.start_at).toLocaleString()} → ${new Date(m.end_at).toLocaleString()}</div>
+      <a class="btn btn-secondary" href="/api/meetings/${m.id}/ics" style="align-self:flex-start">Download .ics</a>
+    </li>`).join('') || '<p class="empty">No meetings scheduled.</p>';
+}
+
+// ---------- CONTENT STUDIO ----------
+document.querySelectorAll('[data-gen]').forEach(btn => btn.addEventListener('click', async () => {
+  const kind = btn.dataset.gen;
+  el('contentOut').innerHTML = '<p class="empty">Generating…</p>';
+  try {
+    const asset = await api('/content/' + kind, { method: 'POST', body: {} });
+    renderContentAsset(asset);
+    loadContentHistory();
+  } catch (ex) { el('contentOut').innerHTML = `<p class="empty">${escHtml(ex.message)}</p>`; }
+}));
+el('genGraphicBtn').addEventListener('click', async () => {
+  const prompt = el('graphicPrompt').value.trim(); if (!prompt) return;
+  el('contentOut').innerHTML = '<p class="empty">Generating…</p>';
+  try { const asset = await api('/content/graphic', { method: 'POST', body: { prompt } }); renderContentAsset(asset); loadContentHistory(); }
+  catch (ex) { el('contentOut').innerHTML = `<p class="empty">${escHtml(ex.message)}</p>`; }
+});
+el('genVideoBtn').addEventListener('click', async () => {
+  const prompt = el('videoPrompt').value.trim(); if (!prompt) return;
+  el('contentOut').innerHTML = '<p class="empty">Generating…</p>';
+  try { const asset = await api('/content/video-ad', { method: 'POST', body: { prompt } }); renderContentAsset(asset); loadContentHistory(); }
+  catch (ex) { el('contentOut').innerHTML = `<p class="empty">${escHtml(ex.message)}</p>`; }
+});
+
+function renderContentAsset(asset) {
+  let body = '';
+  if (asset.type === 'graphic' && asset.result_url) body = `<img src="${asset.result_url}" style="max-width:320px;border-radius:8px" />`;
+  else if (asset.result_url) body = `<a href="${asset.result_url}" target="_blank">Open result</a>`;
+  else body = `<div class="pre">${escHtml(JSON.stringify(asset.result_text, null, 2))}</div>`;
+  el('contentOut').innerHTML = `<div class="card"><div class="card-kicker">${escHtml(asset.type)} · ${escHtml(asset.provider)}</div>${body}</div>`;
+}
+
+async function loadContentHistory() {
+  const items = await api('/content').catch(() => []);
+  el('contentHistory').innerHTML = items.slice(0, 20).map(a => `<div class="card">
+      <div class="card-kicker">${escHtml(a.type)} · ${new Date(a.created_at).toLocaleString()}</div>
+      <div class="card-body">${a.result_url ? `<a href="${a.result_url}" target="_blank">Open</a>` : escHtml(JSON.stringify(a.result_text)).slice(0, 200) + '…'}</div>
+    </div>`).join('') || '<p class="empty">Nothing generated yet.</p>';
+}
+
+// ---------- ASSISTANT ----------
+async function loadChatHistory() {
+  const rows = await api('/assistant/history').catch(() => []);
+  el('chatLog').innerHTML = rows.filter(r => r.role !== 'tool').map(renderChatRow).join('');
+  el('chatLog').scrollTop = el('chatLog').scrollHeight;
+}
+function renderChatRow(r) {
+  if (!r.content) return '';
+  return `<div class="chatbubble ${r.role === 'user' ? 'mine' : 'theirs'}">${escHtml(r.content)}</div>`;
+}
+el('chatSendBtn').addEventListener('click', sendChat);
+el('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+async function sendChat() {
+  const message = el('chatInput').value.trim(); if (!message) return;
+  el('chatInput').value = '';
+  el('chatLog').insertAdjacentHTML('beforeend', `<div class="chatbubble mine">${escHtml(message)}</div>`);
+  el('chatLog').scrollTop = el('chatLog').scrollHeight;
+  try {
+    const data = await api('/assistant/chat', { method: 'POST', body: { message } });
+    let actionsHtml = (data.actions || []).map(a => `<div class="toolcall">→ used tool: ${escHtml(a.tool)}</div>`).join('');
+    el('chatLog').insertAdjacentHTML('beforeend', `<div class="chatbubble theirs">${escHtml(data.reply)}${actionsHtml}</div>`);
+  } catch (ex) {
+    el('chatLog').insertAdjacentHTML('beforeend', `<div class="chatbubble theirs">${escHtml(ex.message)}</div>`);
+  }
+  el('chatLog').scrollTop = el('chatLog').scrollHeight;
+}
+el('runAutonomousBtn').addEventListener('click', async () => {
+  el('runAutonomousBtn').disabled = true; el('runAutonomousBtn').textContent = 'Running…';
+  try {
+    const data = await api('/assistant/run-autonomous', { method: 'POST' });
+    el('chatLog').insertAdjacentHTML('beforeend', `<div class="chatbubble theirs"><b>Autonomous run:</b> ${escHtml(data.reply)}</div>`);
+  } catch (ex) { alert(ex.message); }
+  el('runAutonomousBtn').disabled = false; el('runAutonomousBtn').textContent = 'Run assistant now (autonomous)';
+});
+
+// ---------- SETTINGS ----------
+async function loadSettings() {
+  const me = await api('/auth/me').catch(() => null);
+  if (!me) return;
+  company = me.company;
+  el('companyKv').innerHTML = `
+    <dt>Name</dt><dd>${escHtml(company.name)}</dd>
+    <dt>Industry</dt><dd>${escHtml(company.industry || '—')}</dd>
+    <dt>Home market</dt><dd>${escHtml(company.home_city)}, ${escHtml(company.home_country)}</dd>
+    <dt>Description</dt><dd>${escHtml(company.description)}</dd>`;
+  el('directionsOut').textContent = JSON.stringify(company.directions, null, 2);
+}
+el('regenBtn').addEventListener('click', async () => {
+  el('regenBtn').disabled = true; el('regenBtn').textContent = 'Regenerating…';
+  try { await api('/companies/me/regenerate-profile', { method: 'POST' }); await loadSettings(); }
+  catch (ex) { alert(ex.message); }
+  el('regenBtn').disabled = false; el('regenBtn').textContent = 'Regenerate AI profile';
+});
+</script>
+</body>
+</html>

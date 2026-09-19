@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chunguza Growth Platform</title>
+<link rel="stylesheet" href="ds.css" />
+<style>
+  html, body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); min-height: 100vh; }
+  .page { min-height: 100vh; display: grid; place-items: center;
+    background: radial-gradient(120% 60% at 6% -10%, var(--color-accent-900) 0%, transparent 62%), var(--color-bg); }
+  .wrap { max-width: 640px; padding: 40px 20px; text-align: center; }
+  .mark { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--color-accent);
+    border-radius: 9px; color: var(--color-accent); font-size: 15px; font-weight: 600; margin-bottom: 22px; }
+  h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -.02em; margin-bottom: 14px; }
+  p.lede { color: color-mix(in srgb, var(--color-text) 68%, transparent); font-size: 16px; line-height: 1.7; max-width: 50ch; margin: 0 auto 30px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
+  .cta .btn { min-height: 46px; padding-inline: 22px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; text-align: left; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="wrap">
+    <span class="logo-mark logo-mark-hero">
+      <span class="mark" data-logo-fallback style="width:56px;height:56px;font-size:22px;">C</span>
+      <canvas data-chunguza-logo="full" aria-hidden="true"></canvas>
+    </span>
+    <h1>One tool, every company's own growth engine.</h1>
+    <p class="lede">Register your company and describe what it does — our AI builds your ideal-customer profile, geo strategy, and outreach voice automatically. Then find prospects across Nairobi, Kenya, East Africa, Africa or globally, run AI-personalized cold email and calling, and let a content studio &amp; AI assistant help you sell.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="/register.html">Register your company</a>
+      <a class="btn btn-secondary" href="/login.html">Log in</a>
+    </div>
+    <div class="grid">
+      <span class="tag tag-neutral">AI-personalized onboarding</span>
+      <span class="tag tag-neutral">Geo-scoped prospecting</span>
+      <span class="tag tag-neutral">Self-improving lead scoring</span>
+      <span class="tag tag-neutral">AI cold email + calling</span>
+      <span class="tag tag-neutral">Content studio</span>
+      <span class="tag tag-neutral">AI sales assistant</span>
+    </div>
+  </div>
+</div>
+<script type="importmap">
+{ "imports": {
+  "three": "/js/vendor/three/three.module.js",
+  "three/addons/": "/js/vendor/three/addons/"
+} }
+</script>
+<script type="module" src="/js/logoViewer.js"></script>
+</body>
+</html>

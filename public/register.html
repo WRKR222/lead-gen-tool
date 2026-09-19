@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Register your company — Chunguza Growth Platform</title>
+<link rel="stylesheet" href="ds.css" />
+<style>
+  html, body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); min-height: 100vh; }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 56px 20px 80px; }
+  .mark { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--color-accent);
+    border-radius: 8px; color: var(--color-accent); font-size: 13px; font-weight: 600; margin-bottom: 18px; }
+  h1 { font-size: 28px; margin-bottom: 6px; }
+  p.lede { color: color-mix(in srgb, var(--color-text) 65%, transparent); font-size: 14px; margin-bottom: 30px; max-width: 52ch; }
+  .section { margin-bottom: 26px; padding-bottom: 26px; border-bottom: 1px solid var(--color-divider); }
+  .section:last-of-type { border-bottom: none; }
+  h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-accent-300); margin-bottom: 14px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field { margin-bottom: 14px; }
+  .hint { font-size: 12px; color: color-mix(in srgb, var(--color-text) 50%, transparent); margin-top: 4px; }
+  .err { color: #ff9a9a; font-size: 13px; margin: 10px 0 0; min-height: 18px; white-space: pre-wrap; }
+  .foot { margin-top: 20px; font-size: 13px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .foot a { color: var(--color-accent-300); }
+  .loading-note { font-size: 12px; color: var(--color-accent-300); margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="logo-mark" style="width:28px;height:28px;margin-bottom:18px;">
+    <span class="mark" data-logo-fallback>C</span>
+    <canvas data-chunguza-logo="mark" aria-hidden="true"></canvas>
+  </span>
+  <h1>Register your company</h1>
+  <p class="lede">Tell us what your company does and what you want from this tool. Our AI reads that and builds your company's own ideal-customer profile, geo strategy, outreach tone and sales narrative automatically — every company that signs up gets a tool tuned to itself, not a generic template.</p>
+
+  <form id="form">
+    <div class="section">
+      <h2>Company</h2>
+      <div class="field"><label for="companyName">Company name</label><input class="input" id="companyName" required /></div>
+      <div class="field">
+        <label for="description">What does your company do, and what do you want from this tool?</label>
+        <textarea class="input" id="description" rows="5" required placeholder="e.g. We run a boutique BnB brand in Nairobi. We want to find corporate travel managers and event planners across Kenya and East Africa who book accommodation for teams, and automate the first few rounds of outreach and follow-up."></textarea>
+        <p class="hint">The more specific, the better your AI profile will be. You can regenerate this later from Settings.</p>
+      </div>
+      <div class="row">
+        <div class="field"><label for="industry">Industry (optional)</label><input class="input" id="industry" placeholder="e.g. hospitality" /></div>
+        <div class="field"><label for="website">Website (optional)</label><input class="input" id="website" placeholder="https://" /></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="homeCountry">Home country</label>
+          <select class="input" id="homeCountry">
+            <option value="KE" selected>Kenya</option><option value="UG">Uganda</option><option value="TZ">Tanzania</option>
+            <option value="RW">Rwanda</option><option value="NG">Nigeria</option><option value="ZA">South Africa</option>
+            <option value="US">United States</option><option value="GB">United Kingdom</option>
+          </select>
+        </div>
+        <div class="field"><label for="homeCity">Home city</label><input class="input" id="homeCity" value="Nairobi" /></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Your account</h2>
+      <div class="field"><label for="ownerName">Your name</label><input class="input" id="ownerName" required /></div>
+      <div class="row">
+        <div class="field"><label for="email">Work email</label><input class="input" id="email" type="email" required /></div>
+        <div class="field"><label for="password">Password</label><input class="input" id="password" type="password" minlength="8" required /></div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block" type="submit" id="submit">Create workspace</button>
+    <p class="loading-note" id="loadingNote" hidden>Building your AI profile — this takes a few seconds…</p>
+    <p class="err" id="err"></p>
+  </form>
+  <p class="foot">Already registered? <a href="/login.html">Log in</a></p>
+</div>
+<script type="importmap">
+{ "imports": {
+  "three": "/js/vendor/three/three.module.js",
+  "three/addons/": "/js/vendor/three/addons/"
+} }
+</script>
+<script type="module" src="/js/logoViewer.js"></script>
+<script src="shared.js"></script>
+<script>
+  const form = document.getElementById('form'), err = document.getElementById('err'), submit = document.getElementById('submit'), loadingNote = document.getElementById('loadingNote');
+  if (getAuth()) window.location.href = '/app.html';
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = ''; submit.disabled = true; submit.textContent = 'Creating…'; loadingNote.hidden = false;
+    try {
+      const data = await api('/auth/register', { auth: false, method: 'POST', body: {
+        companyName: document.getElementById('companyName').value,
+        description: document.getElementById('description').value,
+        industry: document.getElementById('industry').value || undefined,
+        website: document.getElementById('website').value || undefined,
+        homeCountry: document.getElementById('homeCountry').value,
+        homeCity: document.getElementById('homeCity').value,
+        ownerName: document.getElementById('ownerName').value,
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+      } });
+      setAuth({ token: data.token, user: data.user });
+      window.location.href = '/app.html?onboarded=1';
+    } catch (ex) {
+      err.textContent = ex.message; submit.disabled = false; submit.textContent = 'Create workspace'; loadingNote.hidden = true;
+    }
+  });
+</script>
+</body>
+</html>

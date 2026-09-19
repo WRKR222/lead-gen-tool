@@ -1,0 +1,56 @@
+# Render.com deploy config. Push this repo to GitHub, then in Render:
+# New -> Blueprint -> point at the repo. It will read this file automatically.
+# Persistent disk keeps data/leadgen.db across deploys/restarts.
+services:
+  - type: web
+    name: leadgen-tool
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: node src/db/migrate.js && node src/server.js
+    healthCheckPath: /api/health
+    disk:
+      name: leadgen-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLAY_API_KEY
+        sync: false
+      - key: CLAY_WORKSPACE_ID
+        sync: false
+      - key: EXPLORIUM_API_KEY
+        sync: false
+      - key: SERPAPI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: VIDEO_API_BASE
+        sync: false
+      - key: VIDEO_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: FROM_NAME
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: MAX_EMAILS_PER_HOUR
+        value: 100
+      - key: MAX_EMAILS_PER_DAY
+        value: 500

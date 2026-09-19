@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  leadgen:
+    build: .
+    container_name: leadgen-tool
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    volumes:
+      - leadgen_data:/app/data   # persists the SQLite DB across deploys/restarts
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/api/health', r => process.exit(r.statusCode===200?0:1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  leadgen_data:

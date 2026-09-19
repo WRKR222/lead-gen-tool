@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Log in — Chunguza Growth Platform</title>
+<link rel="stylesheet" href="ds.css" />
+<style>
+  html, body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); min-height: 100vh; }
+  .wrap { max-width: 420px; margin: 0 auto; padding: 64px 20px; }
+  .mark { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--color-accent);
+    border-radius: 8px; color: var(--color-accent); font-size: 13px; font-weight: 600; margin-bottom: 18px; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  p.lede { color: color-mix(in srgb, var(--color-text) 65%, transparent); font-size: 14px; margin-bottom: 28px; }
+  .field { margin-bottom: 14px; }
+  .err { color: #ff9a9a; font-size: 13px; margin: 10px 0 0; min-height: 18px; }
+  .foot { margin-top: 20px; font-size: 13px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .foot a { color: var(--color-accent-300); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="logo-mark" style="width:28px;height:28px;margin-bottom:18px;">
+    <span class="mark" data-logo-fallback>C</span>
+    <canvas data-chunguza-logo="mark" aria-hidden="true"></canvas>
+  </span>
+  <h1>Welcome back</h1>
+  <p class="lede">Log in to your company's lead-generation &amp; growth workspace.</p>
+  <form id="form">
+    <div class="field"><label for="email">Work email</label><input class="input" id="email" type="email" required /></div>
+    <div class="field"><label for="password">Password</label><input class="input" id="password" type="password" required /></div>
+    <button class="btn btn-primary btn-block" type="submit" id="submit">Log in</button>
+    <p class="err" id="err"></p>
+  </form>
+  <p class="foot">No account yet? <a href="/register.html">Register your company</a></p>
+</div>
+<script type="importmap">
+{ "imports": {
+  "three": "/js/vendor/three/three.module.js",
+  "three/addons/": "/js/vendor/three/addons/"
+} }
+</script>
+<script type="module" src="/js/logoViewer.js"></script>
+<script src="shared.js"></script>
+<script>
+  const form = document.getElementById('form'), err = document.getElementById('err'), submit = document.getElementById('submit');
+  if (getAuth()) window.location.href = '/app.html';
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = ''; submit.disabled = true; submit.textContent = 'Logging in…';
+    try {
+      const data = await api('/auth/login', { auth: false, method: 'POST', body: {
+        email: document.getElementById('email').value, password: document.getElementById('password').value
+      } });
+      setAuth({ token: data.token, user: data.user });
+      window.location.href = '/app.html';
+    } catch (ex) { err.textContent = ex.message; submit.disabled = false; submit.textContent = 'Log in'; }
+  });
+</script>
+</body>
+</html>

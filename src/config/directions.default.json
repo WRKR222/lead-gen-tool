@@ -1,0 +1,53 @@
+{
+  "companyProfileVersion": 1,
+  "sender": {
+    "senderName": "Jane Doe",
+    "senderTitle": "Head of Partnerships",
+    "companyName": "Your Company",
+    "companyOneLiner": "We help SaaS companies cut onboarding time in half.",
+    "valueProposition": "Automates the manual parts of customer onboarding so new users reach their first 'aha moment' 2-3x faster.",
+    "proofPoint": "Teams like [example] cut onboarding time from 14 days to 5.",
+    "callToAction": "Ask for a 15-minute call this week.",
+    "website": "https://yourcompany.com"
+  },
+  "idealCustomerProfile": {
+    "industries": ["software", "saas"],
+    "excludeIndustries": [],
+    "companySizeMin": 10,
+    "companySizeMax": 500,
+    "revenueMinUSD": null,
+    "revenueMaxUSD": null,
+    "targetTitles": ["ceo", "founder", "vp sales", "head of growth", "cto"],
+    "titleSeniorityWeight": { "c_level": 1.0, "vp": 0.8, "director": 0.6, "manager": 0.4, "other": 0.2 },
+    "keywords": [],
+    "excludeKeywords": []
+  },
+  "geoStrategy": {
+    "homeCountry": "KE",
+    "expansionOrder": ["home_country", "region", "global"],
+    "regionDefinition": "continent",
+    "radiusKmStart": 150,
+    "radiusKmStep": 300,
+    "radiusKmMax": 3000,
+    "advanceToNextTierWhen": {
+      "minLeadsFoundBelowThreshold": 25,
+      "orQualityScoreBelow": 0.35
+    }
+  },
+  "scoring": {
+    "conversionEvents": ["replied", "meeting_booked", "opportunity_created", "closed_won"],
+    "negativeEvents": ["bounced", "unsubscribed", "marked_spam", "closed_lost"],
+    "learningRate": 0.05,
+    "minSamplesBeforeReweighting": 20
+  },
+  "outreach": {
+    "tonePreset": "professional_direct",
+    "sendingWindowLocalHours": { "start": 8, "end": 17 },
+    "daysOfWeek": ["mon", "tue", "wed", "thu", "fri"],
+    "followUpSequence": [
+      { "dayOffset": 0, "templateId": "intro" },
+      { "dayOffset": 3, "templateId": "followup_1" },
+      { "dayOffset": 8, "templateId": "followup_2_breakup" }
+    ]
+  }
+}
