@@ -4,6 +4,9 @@
   "description": "Multi-tenant, AI-personalized lead-generation and growth platform: any company registers, gets an AI-synthesized ideal-customer/geo/outreach profile, then searches for prospects (Nairobi -> Kenya -> East Africa -> Africa -> Global), runs AI cold-calling + email campaigns with a self-improving scorer, and uses an AI sales assistant plus a content studio (pitches, ad copy, social plans, graphics, video-ad concepts) to sell itself.",
   "main": "src/server.js",
   "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
