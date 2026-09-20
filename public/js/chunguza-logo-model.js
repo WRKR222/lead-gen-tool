@@ -124,6 +124,20 @@ function poppinsWord(font, text) {
   return { group, width: bb.max.x - bb.min.x, top: bb.max.y, desc: 0 };
 }
 
+// Recenters `logo`'s children on the group's own visual bounding-box center,
+// so the mark (+ wordmark, when present) sits centered in the camera frame
+// and spins around its own middle instead of an arbitrary baseline origin.
+function center(logo) {
+  logo.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(logo);
+  const mid = box.getCenter(new THREE.Vector3());
+  logo.children.forEach(child => {
+    child.position.x -= mid.x;
+    child.position.y -= mid.y;
+  });
+  return logo;
+}
+
 export async function buildLogo(opts = {}) {
   const logo = new THREE.Group();
   logo.name = 'chunguza-logo';
@@ -154,7 +168,7 @@ export async function buildLogo(opts = {}) {
     group.position.y = desc * scale;
     mark.position.y = (desc + top) * scale + 0.3 + markR + markStroke / 2 + 0.035;
     logo.add(mark, group);
-    return logo;
+    return center(logo);
   }
 
   const word = new THREE.Group();
@@ -188,5 +202,5 @@ export async function buildLogo(opts = {}) {
   } else {
     logo.add(mark, word);
   }
-  return logo;
+  return center(logo);
 }
