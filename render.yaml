@@ -6,7 +6,7 @@ services:
     name: leadgen-tool
     env: node
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: node src/db/migrate.js && node src/server.js
     healthCheckPath: /api/health
     disk:
