@@ -11,7 +11,7 @@
  *     question / industry trend / curiosity / referral-style) that is
  *     different from the angle used in the immediately previous email
  *     to that lead.
- *  3. Runs at a non-zero temperature so phrasing genuinely varies even
+ *  3. Passes the full history as "do not repeat", so phrasing varies even
  *     when the underlying facts (lead + company) are the same.
  *  4. Post-generation, does a similarity check against prior emails to
  *     that lead and regenerates once if the new draft is too close to
@@ -21,20 +21,22 @@
  * if you don't want to use Claude for generation - the interface
  * (generateEmailForLead) stays the same either way.
  */
-const fetch = require('node-fetch');
 const { db } = require('../db/database');
+const llm = require('./llm');
+const { playbookPromptBlock } = require('../config/playbook');
 
 const ANGLES = ['pain_point', 'social_proof', 'curiosity_question', 'industry_trend', 'direct_value_prop', 'mutual_connection_style'];
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
-
+/** Every email already sent to this lead - campaign sends and direct/bulk/follow-up sends. */
 function getSendHistory(leadId) {
   return db.prepare(`
     SELECT step_id, subject, body, angle, sent_at FROM campaign_sends
     WHERE lead_id = ? AND status = 'sent'
+    UNION ALL
+    SELECT mode AS step_id, subject, body, angle, sent_at FROM email_messages
+    WHERE lead_id = ? AND direction = 'outbound' AND status = 'sent'
     ORDER BY sent_at ASC
-  `).all(leadId);
+  `).all(leadId, leadId);
 }
 
 function pickAngle(history) {
@@ -51,15 +53,18 @@ function buildPrompt(lead, directions, history, angle, stepId) {
     ? history.map((h, i) => `--- Previous email #${i + 1} (step: ${h.step_id}, angle: ${h.angle || 'unknown'}) ---\nSubject: ${h.subject}\n${h.body}`).join('\n\n')
     : '(No previous emails have been sent to this lead - this is the first touch.)';
 
-  const system = `You write short, specific, non-generic cold outreach emails on behalf of a real sales sender. \
+  const system = `You write short, specific, non-generic outreach emails on behalf of a real sender whose ONLY goal is to book a meeting. \
 Hard rules:
-- Every email must be substantively different in wording, structure, and opening line from every previous email listed below, even though it's the same lead and same company pitch.
+- Every email must be substantively different in wording, structure, and opening line from every previous email listed below, even though it's the same lead and same company.
 - Never reuse a sentence, phrase, or subject line from a previous email to this lead.
-- Keep it under 120 words. No em dashes, no "I hope this finds you well", no generic filler.
-- Reference something specific and plausible about the lead's company/industry/role - infer sensibly from the data given, don't invent false specifics like fake mutual connections or fake stats.
+- Keep it under 110 words. No em dashes, no "I hope this finds you well", no generic filler.
+- Reference something specific and plausible about the lead - infer sensibly from the data given, don't invent false specifics like fake mutual connections or fake stats.
+- Follow the standards below: straight to the point with a hook, create scarcity/exclusivity, address the decision maker, and NEVER pitch the service - the ask is a short meeting.
 - Write ONLY valid JSON: {"subject": "...", "body": "..."}. No markdown, no preamble.
 - The requested rhetorical angle for THIS email is: ${angle}.
-- This is step "${stepId}" in the outreach sequence.`;
+- This is step "${stepId}" in the outreach sequence.
+
+${playbookPromptBlock()}`;
 
   const user = `SENDER:
 Name: ${sender.senderName}, ${sender.senderTitle} at ${sender.companyName}
@@ -68,10 +73,11 @@ Value proposition: ${sender.valueProposition}
 Proof point (only use if it fits naturally, don't force it): ${sender.proofPoint}
 Desired call to action: ${sender.callToAction}
 
-LEAD:
+${directions.bookingLink ? `Meeting booking link (include it): ${directions.bookingLink}\n` : ''}
+LEAD (${lead.leadType === 'person' ? 'an individual person' : 'a business'}):
 Contact: ${lead.contactName || 'Unknown name'}
 Title: ${lead.title || 'Unknown title'}
-Company: ${lead.companyName}
+Company: ${lead.companyName || '(individual)'}
 Industry: ${lead.industry || 'unknown'}
 Location: ${[lead.city, lead.country].filter(Boolean).join(', ') || 'unknown'}
 Company size: ${lead.companySize || 'unknown'}
@@ -92,32 +98,8 @@ function crudeSimilarity(a, b) {
   return union === 0 ? 0 : intersection / union;
 }
 
-async function callModel(system, user) {
-  if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 400,
-      temperature: 0.9,
-      system,
-      messages: [{ role: 'user', content: user }]
-    })
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Anthropic API error ${res.status}: ${text}`);
-  }
-  const data = await res.json();
-  const textBlock = (data.content || []).find(b => b.type === 'text');
-  if (!textBlock) throw new Error('No text content returned from model');
-  const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
-  return JSON.parse(cleaned);
+function callModel(system, user) {
+  return llm.completeJson({ system, user, effort: 'low', maxTokens: 4000 });
 }
 
 /**
@@ -159,18 +141,25 @@ const OPENERS = {
 
 function localFallbackGenerate(lead, directions, angle, stepId) {
   const { sender } = directions;
-  const opener = pick(OPENERS[angle] || OPENERS.direct_value_prop)(lead);
-  const closings = [
-    `${sender.callToAction} Worth a quick chat?`,
-    `${sender.callToAction} Open to connecting this week?`,
-    `Happy to share more if useful - ${sender.callToAction.toLowerCase()}`
-  ];
-  const body = `${opener}\n\n${sender.valueProposition}\n\n${pick(closings)}\n\n${sender.senderName}\n${sender.companyName}`;
+  const who = lead.companyName || lead.contactName || 'you';
+  const opener = pick(OPENERS[angle] || OPENERS.direct_value_prop)({ ...lead, companyName: who });
+  const scarcity = pick([
+    `We only take on one business like yours per area, and ${lead.city || 'your area'} is still open.`,
+    `We keep our client list small on purpose so each one gets real attention - there is room for one more this month.`,
+    `I am reaching out to you specifically, not a list - I think ${who} is a strong fit.`
+  ]);
+  const ask = pick([
+    'Open to a 15-minute conversation this week? I will answer everything there.',
+    'Can we find 15 minutes this week? Any questions, I will cover in the meeting.',
+    'Worth a short meeting to see if there is a fit?'
+  ]);
+  const booking = directions.bookingLink ? `\n\nPick a time here: ${directions.bookingLink}` : '';
+  const body = `${opener}\n\n${scarcity}\n\n${ask}${booking}\n\n${sender.senderName}\n${sender.companyName}`;
   const subjects = [
-    `Quick one for ${lead.companyName}`,
-    `${lead.companyName} + ${sender.companyName}`,
-    `Thought this might help, ${lead.contactName ? lead.contactName.split(' ')[0] : 'quick note'}`,
-    `${stepId === 'intro' ? 'Introduction' : 'Following up'} - ${lead.companyName}`
+    `Quick one for ${who}`,
+    `${who} + ${sender.companyName}`,
+    `${lead.contactName ? lead.contactName.split(' ')[0] : 'Quick note'} - 15 minutes?`,
+    `${stepId === 'intro' ? 'Introduction' : 'Following up'} - ${who}`
   ];
   return { subject: pick(subjects), body: `${body}\n\n[demo mode - not sent by real AI]` };
 }
@@ -184,7 +173,7 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
  * @returns {Promise<{subject: string, body: string, angle: string}>}
  */
 async function generateEmailForLead(lead, directions, stepId) {
-  const useMock = !ANTHROPIC_API_KEY || process.env.MOCK_MODE === 'true';
+  const useMock = !llm.enabled();
   const history = getSendHistory(lead.id);
   let angle = pickAngle(history);
 
@@ -212,6 +201,10 @@ async function generateEmailForLead(lead, directions, stepId) {
     draft = await callModel(retry.system, retry.user);
   }
 
+  if (!draft || !draft.subject || !draft.body) {
+    const fb = localFallbackGenerate(lead, directions, angle, stepId);
+    return { subject: fb.subject, body: fb.body.replace('\n\n[demo mode - not sent by real AI]', ''), angle };
+  }
   return { subject: draft.subject, body: draft.body, angle };
 }
 

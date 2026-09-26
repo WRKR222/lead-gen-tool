@@ -31,6 +31,7 @@
 const clay = require('./clayService');
 const vibe = require('./vibeProspectingService');
 const webResearch = require('./webResearchLeadService');
+const { generateMockEntities } = require('./mockDataService');
 
 const SOURCES = {
   clay: {
@@ -38,6 +39,8 @@ const SOURCES = {
     label: 'Clay',
     enabled: () => process.env.DISABLE_CLAY !== 'true',
     async search(filters, limit) {
+      // Demo mode: one consistent set, so each mock company comes with its own decision maker.
+      if (clay.isMock()) return generateMockEntities(filters, Math.min(limit, 10), 'clay-mock');
       const [companies, contacts] = await Promise.all([
         clay.searchCompanies(filters, limit).catch(() => []),
         clay.searchContacts(filters, limit).catch(() => [])

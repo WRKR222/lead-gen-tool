@@ -28,7 +28,28 @@ CREATE TABLE IF NOT EXISTS companies (
   onboarding_status TEXT DEFAULT 'pending', -- pending | profiling | ready
   plan TEXT DEFAULT 'trial',
   created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  -- v3 agency model (keep in sync with V3_COLUMNS in database.js)
+  kind TEXT DEFAULT 'agency',     -- agency | client
+  agency_id TEXT,                 -- set on clients: the agency serving them
+  currency TEXT,                  -- ISO 4217, derived from home_country
+  target_market TEXT DEFAULT 'b2b', -- b2b (leads are companies) | b2c (leads are people)
+  client_status TEXT,             -- onboarding | active | at_risk | paused | churned
+  client_since TEXT,
+  churned_at TEXT,
+  churn_reason TEXT,
+  monthly_retainer REAL,          -- what this client pays the agency per month
+  services_json TEXT,             -- ["paid_advertising","appointment_setting","ai_automation"]
+  ad_platform TEXT,               -- meta | google_ads | youtube | tiktok (one, to avoid overwhelm)
+  value_pyramid_json TEXT,
+  funnel_json TEXT,
+  business_profile_text TEXT,
+  business_profile_filename TEXT,
+  business_profile_uploaded_at TEXT,
+  baseline_customer_count INTEGER,
+  baseline_customer_date TEXT,
+  settings_json TEXT,
+  inbound_token TEXT
 );
 
 -- Users belong to exactly one company (simple B2B model - one workspace
@@ -49,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_users_company ON users(company_id);
 CREATE TABLE IF NOT EXISTS leads (
   id TEXT PRIMARY KEY,
   company_id TEXT NOT NULL REFERENCES companies(id),
-  company_name TEXT NOT NULL,     -- the PROSPECT's company name (not the tenant)
+  company_name TEXT,              -- the PROSPECT's company name (not the tenant); null for person leads
   contact_name TEXT,
   title TEXT,
   email TEXT,
@@ -66,10 +87,26 @@ CREATE TABLE IF NOT EXISTS leads (
   geo_tier INTEGER,            -- 1 = home country, 2 = region, 3 = global (auto-expansion mode)
   geo_scope TEXT,              -- explicit scope used to find it: nairobi | kenya | east_africa | africa | global
   score REAL DEFAULT 0,        -- current ML/heuristic score, 0-1
-  status TEXT DEFAULT 'new',   -- new | contacted | replied | meeting_booked | opportunity | closed_won | closed_lost | bounced | unsubscribed | spam
+  status TEXT DEFAULT 'new',   -- new | contacted | replied | meeting_booked | opportunity | on_fence | no_response | closed_won | closed_lost | bounced | unsubscribed | spam
   notes TEXT,
   created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  -- v3 (keep in sync with V3_COLUMNS in database.js)
+  lead_type TEXT DEFAULT 'business', -- business | person
+  website TEXT,
+  address TEXT,                -- physical address, for door-to-door visits
+  preferred_methods_json TEXT, -- outreach methods chosen for this lead
+  last_contacted_at TEXT,
+  next_follow_up_at TEXT,
+  follow_up_count INTEGER DEFAULT 0,
+  follow_up_paused INTEGER DEFAULT 0,
+  lost_reason_category TEXT,
+  lost_reason TEXT,
+  estimated_value REAL,        -- from the workspace's value pyramid
+  converted_at TEXT,
+  converted_client_id TEXT,    -- agency prospect -> client workspace
+  converted_customer_id TEXT,  -- client lead -> customer record
+  assigned_to TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_leads_company ON leads(company_id);
@@ -204,7 +241,13 @@ CREATE TABLE IF NOT EXISTS meetings (
   ics_uid TEXT,
   external_calendar_id TEXT,       -- id from a real calendar provider, once wired up
   created_by TEXT DEFAULT 'user',  -- user | ai_assistant
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now')),
+  -- v3 (keep in sync with V3_COLUMNS in database.js)
+  meeting_type TEXT DEFAULT 'call', -- in_person | call | video
+  cps_brief_json TEXT,             -- AI-prepared Attention/Identify/Solve/Cost brief
+  cps_notes_json TEXT,             -- what was learned at each CPS stage
+  outcome TEXT,                    -- yes | on_fence | no | no_show
+  quoted_price REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_company ON meetings(company_id);
@@ -242,3 +285,174 @@ CREATE TABLE IF NOT EXISTS assistant_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_assistant_company ON assistant_messages(company_id, created_at);
+
+-- =========================================================================
+-- v3: AI lead-generation AGENCY model.
+-- companies.kind = 'agency' (e.g. Chunguza) or 'client' (company X, which
+-- hired the agency; companies.agency_id points at its agency). A client's
+-- leads are ITS prospective customers (company Y, or people for B2C
+-- clients such as a dental practice); the agency's own leads are its
+-- prospective clients. Columns added to existing tables live in
+-- database.js (ALTER TABLE ... ADD COLUMN is not idempotent in SQLite).
+-- =========================================================================
+
+-- Every way to reach a lead, each tied to WHO it reaches (owner vs.
+-- receptionist), including digital platforms - not just one phone number.
+CREATE TABLE IF NOT EXISTS lead_contacts (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  lead_id TEXT NOT NULL REFERENCES leads(id),
+  channel TEXT NOT NULL,          -- phone | whatsapp | sms | email | linkedin | instagram | facebook | tiktok | x | youtube | website | address | other
+  value TEXT NOT NULL,
+  person_name TEXT,
+  person_role TEXT,
+  is_decision_maker INTEGER DEFAULT 0,
+  is_primary INTEGER DEFAULT 0,
+  source TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_lead_contacts_lead ON lead_contacts(lead_id);
+CREATE INDEX IF NOT EXISTS idx_lead_contacts_value ON lead_contacts(company_id, channel, value);
+
+-- One row per contact attempt, whichever method was chosen (door to door,
+-- cold call, digital platforms, email/DM), with its recorded result and
+-- the meeting-setting standards checklist the rep confirmed.
+CREATE TABLE IF NOT EXISTS outreach_attempts (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  lead_id TEXT NOT NULL REFERENCES leads(id),
+  user_id TEXT REFERENCES users(id),
+  method TEXT NOT NULL,           -- door_to_door | cold_call | digital | email_dm
+  channel TEXT,                   -- in_person | phone | whatsapp | instagram | facebook | linkedin | tiktok | x | email | sms
+  contact_id TEXT,
+  direction TEXT DEFAULT 'outbound',
+  result TEXT,
+  spoke_to_decision_maker INTEGER,
+  standards_json TEXT,
+  message TEXT,
+  notes TEXT,
+  automated INTEGER DEFAULT 0,
+  occurred_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_attempts_company ON outreach_attempts(company_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_attempts_lead ON outreach_attempts(lead_id);
+
+-- Outbound and inbound email, threaded per lead. Inbound rows arrive via
+-- the inbound webhook or IMAP polling and drive real-time notifications.
+CREATE TABLE IF NOT EXISTS email_messages (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  lead_id TEXT REFERENCES leads(id),
+  direction TEXT NOT NULL,        -- outbound | inbound
+  from_addr TEXT,
+  to_addr TEXT,
+  subject TEXT,
+  body TEXT,
+  message_id TEXT,
+  in_reply_to TEXT,
+  status TEXT,                    -- draft | sent | failed | received | skipped_suppressed | skipped_rate_limited
+  mode TEXT,                      -- bulk_template | bespoke | follow_up | auto_reply | manual
+  angle TEXT,
+  classification TEXT,            -- interested | question | meeting_request | not_interested | out_of_office | unsubscribe | other
+  auto_generated INTEGER DEFAULT 0,
+  preview_url TEXT,
+  sent_at TEXT,
+  received_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_company ON email_messages(company_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_email_lead ON email_messages(lead_id);
+CREATE INDEX IF NOT EXISTS idx_email_message_id ON email_messages(message_id);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  agency_id TEXT,
+  type TEXT NOT NULL,             -- email_reply | meeting_booked | lead_converted | follow_up_due | client_at_risk | customer_lost | auto_reply_draft | inbound_lead
+  title TEXT NOT NULL,
+  body TEXT,
+  lead_id TEXT,
+  read_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_company ON notifications(company_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_agency ON notifications(agency_id, created_at);
+
+-- A client's existing customer roster (imported from CSV/Excel or added
+-- by hand, or created when a lead converts), used for churn tracking.
+CREATE TABLE IF NOT EXISTS customers (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  name TEXT NOT NULL,
+  contact_name TEXT,
+  email TEXT,
+  phone TEXT,
+  customer_type TEXT DEFAULT 'business', -- business | person
+  tier TEXT,                      -- value-pyramid tier the customer bought
+  total_value REAL,
+  monthly_value REAL,
+  acquired_at TEXT,
+  source TEXT,                    -- import | manual | lead_conversion
+  lead_id TEXT,
+  status TEXT DEFAULT 'active',   -- active | lost
+  lost_at TEXT,
+  lost_reason_category TEXT,
+  lost_reason TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_company ON customers(company_id, status);
+
+-- Every loss, with its reason, so the AI can learn what is going wrong:
+-- a client's lost customers, leads that said no, and (at agency level)
+-- clients the agency lost. `count` supports count-only losses for
+-- companies that track a customer count rather than named customers.
+CREATE TABLE IF NOT EXISTS churn_events (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  subject_kind TEXT NOT NULL,     -- customer | lead | client
+  customer_id TEXT,
+  lead_id TEXT,
+  client_company_id TEXT,
+  count INTEGER DEFAULT 1,
+  reason_category TEXT,
+  reason_text TEXT,
+  occurred_at TEXT DEFAULT (datetime('now')),
+  recorded_by TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_churn_company ON churn_events(company_id, occurred_at);
+
+-- AI-generated learnings and period summaries, kept so they can be
+-- compared over time instead of regenerated on every page view.
+CREATE TABLE IF NOT EXISTS ai_insights (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  kind TEXT NOT NULL,             -- churn_learning | period_summary
+  period_key TEXT,
+  content_json TEXT NOT NULL,
+  generated_by TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_insights_company ON ai_insights(company_id, kind, created_at);
+
+-- Pushes to HighLevel / Appointwise / generic webhooks, for audit.
+CREATE TABLE IF NOT EXISTS integration_events (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  lead_id TEXT,
+  provider TEXT NOT NULL,         -- highlevel | appointwise | webhook
+  action TEXT NOT NULL,
+  status TEXT NOT NULL,           -- ok | mock | error
+  detail TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);

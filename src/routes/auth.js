@@ -2,66 +2,84 @@ const express = require('express');
 const { v4: uuid } = require('uuid');
 const { db } = require('../db/database');
 const { hashPassword, verifyPassword, signToken } = require('../services/authService');
-const { generateCompanyProfile } = require('../services/companyProfileService');
+const workspaces = require('../services/workspaceService');
+const documents = require('../services/documentService');
+const notifications = require('../services/notificationService');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-function slugify(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Math.random().toString(36).slice(2, 7);
+/** Resolve which agency a self-registering client belongs to. */
+function resolveAgency(agencyCode) {
+  if (agencyCode) {
+    return db.prepare("SELECT id, name FROM companies WHERE kind = 'agency' AND (slug = ? OR id = ?)").get(agencyCode, agencyCode) || undefined;
+  }
+  const agencies = db.prepare("SELECT id, name FROM companies WHERE kind = 'agency' ORDER BY created_at ASC LIMIT 2").all();
+  return agencies.length === 1 ? agencies[0] : null;
 }
 
 /**
  * POST /api/auth/register
- * This IS the "company registers its name, explains in depth what it does
- * and what it wants from the tool" step. One call: creates the company,
- * runs AI profiling on the description to build its bespoke directions
- * (ICP, geo strategy, scoring, outreach tone, brand voice, sales
- * narrative), creates the owner user account, and returns a session token
- * - the frontend takes the user straight to the dashboard from here.
+ * One call: creates the workspace (an agency such as Chunguza, or a client
+ * company X that hired the agency), reads the uploaded business profile,
+ * runs the AI setup (profile, value pyramid in local currency, growth
+ * plan), creates the owner account and returns a session token.
  *
- * body: { companyName, description, industry?, website?, homeCountry?,
- *         homeCity?, ownerName, email, password }
+ * body: { accountType: 'agency'|'client', companyName, description, industry?, website?,
+ *         homeCountry?, homeCity?, targetMarket?: 'b2b'|'b2c', services?: string[], adPlatform?,
+ *         agencyCode?, baselineCustomerCount?, businessProfile?: { filename, base64 },
+ *         ownerName, email, password }
  */
 router.post('/register', async (req, res) => {
   try {
-    const { companyName, description, industry, website, homeCountry, homeCity, ownerName, email, password } = req.body;
+    const b = req.body || {};
+    const { companyName, description, ownerName, email, password } = b;
     if (!companyName || !description || !ownerName || !email || !password) {
       return res.status(400).json({ error: 'companyName, description, ownerName, email and password are required' });
     }
     if (password.length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
+    const addr = String(email).toLowerCase().trim();
+    if (db.prepare('SELECT id FROM users WHERE email = ?').get(addr)) return res.status(409).json({ error: 'An account with this email already exists' });
 
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
-    if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
+    const kind = b.accountType === 'client' ? 'client' : 'agency';
+    if (kind === 'agency' && process.env.ALLOW_AGENCY_SIGNUP === 'false' && db.prepare("SELECT 1 FROM companies WHERE kind = 'agency'").get()) {
+      return res.status(403).json({ error: 'Agency sign-up is closed on this platform. Register as a client company instead.' });
+    }
+    let agency = null;
+    if (kind === 'client') {
+      agency = resolveAgency(b.agencyCode);
+      if (agency === undefined) return res.status(400).json({ error: 'Agency code not recognised - ask your agency for its signup link.' });
+    }
 
-    const companyId = uuid();
-    db.prepare(`
-      INSERT INTO companies (id, name, slug, description, industry, website, home_country, home_city, onboarding_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'profiling')
-    `).run(companyId, companyName, slugify(companyName), description, industry || null, website || null,
-      homeCountry || 'KE', homeCity || 'Nairobi');
+    let profile = null;
+    if (b.businessProfile && b.businessProfile.base64) {
+      try { profile = await documents.extractText(b.businessProfile); }
+      catch (err) { return res.status(400).json({ error: `Business profile: ${err.message}` }); }
+    }
 
-    // AI-personalize this company's entire directions profile right away -
-    // this is what makes the dashboard/tool behave differently per company.
-    const profile = await generateCompanyProfile({ name: companyName, description, industry, website, homeCountry, homeCity });
-    db.prepare('UPDATE companies SET ai_profile_json = ?, onboarding_status = ? WHERE id = ?')
-      .run(JSON.stringify(profile), 'ready', companyId);
+    const companyId = workspaces.insertCompany({
+      name: companyName, description, industry: b.industry, website: b.website, homeCountry: b.homeCountry, homeCity: b.homeCity,
+      kind, agencyId: agency ? agency.id : null, targetMarket: b.targetMarket, services: b.services, adPlatform: b.adPlatform,
+      baselineCustomerCount: b.baselineCustomerCount, clientStatus: 'onboarding',
+      businessProfileText: profile ? profile.text : null, businessProfileFilename: profile ? b.businessProfile.filename : null
+    });
+    await workspaces.buildAi(companyId);
 
     const userId = uuid();
-    const passwordHash = await hashPassword(password);
     db.prepare('INSERT INTO users (id, company_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(userId, companyId, ownerName, email.toLowerCase(), passwordHash, 'owner');
+      .run(userId, companyId, ownerName, addr, await hashPassword(password), 'owner');
 
-    // Per-company scorer/warm-up state starts fresh.
-    db.prepare('INSERT OR IGNORE INTO model_weights (company_id, weights_json, samples_seen) VALUES (?, ?, 0)')
-      .run(companyId, JSON.stringify({}));
+    if (agency) {
+      notifications.notify({ companyId: agency.id, type: 'inbound_lead', title: `${companyName} registered as a client`, body: 'Their workspace is set up - review their value pyramid and growth plan.' });
+    }
 
     const token = signToken({ userId, companyId, role: 'owner' });
-    const company = db.prepare('SELECT id, name, slug, description, industry, website, home_country, home_city, onboarding_status, ai_profile_json FROM companies WHERE id = ?').get(companyId);
     res.status(201).json({
       token,
-      user: { id: userId, name: ownerName, email: email.toLowerCase(), role: 'owner' },
-      company: { ...company, directions: JSON.parse(company.ai_profile_json) }
+      user: { id: userId, name: ownerName, email: addr, role: 'owner' },
+      company: workspaces.getWorkspace(companyId),
+      agency: agency ? { id: agency.id, name: agency.name } : null,
+      businessProfile: profile ? { filename: b.businessProfile.filename, chars: profile.chars, pages: profile.pages } : null
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -71,10 +89,10 @@ router.post('/register', async (req, res) => {
 /** POST /api/auth/login  body: { email, password } */
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(String(email).toLowerCase().trim());
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
     const ok = await verifyPassword(password, user.password_hash);
@@ -87,11 +105,18 @@ router.post('/login', async (req, res) => {
   }
 });
 
-/** GET /api/auth/me - current user + company, for the frontend to restore a session */
+/** GET /api/auth/me - current user, home company and the workspaces they can open */
 router.get('/me', requireAuth, (req, res) => {
   const user = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(req.auth.userId);
-  const company = db.prepare('SELECT id, name, slug, description, industry, website, home_country, home_city, onboarding_status, ai_profile_json FROM companies WHERE id = ?').get(req.auth.companyId);
-  res.json({ user, company: { ...company, directions: JSON.parse(company.ai_profile_json || '{}') } });
+  const company = workspaces.getWorkspace(req.auth.homeCompanyId);
+  res.json({ user, company, isAgencyUser: req.auth.isAgencyUser, workspaces: workspaces.listForUser(req.auth.homeCompanyId) });
+});
+
+/** GET /api/auth/agency/:code - public: confirm a client signup link's agency before registering */
+router.get('/agency/:code', (req, res) => {
+  const agency = db.prepare("SELECT name FROM companies WHERE kind = 'agency' AND slug = ?").get(req.params.code);
+  if (!agency) return res.status(404).json({ error: 'Agency not found' });
+  res.json({ name: agency.name });
 });
 
 module.exports = router;

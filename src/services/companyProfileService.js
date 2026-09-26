@@ -18,19 +18,16 @@
  * description) when no key is set or MOCK_MODE=true, so onboarding always
  * works, for free, in demo mode.
  */
-const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
-
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
-const USE_MOCK = !ANTHROPIC_API_KEY || process.env.MOCK_MODE === 'true';
+const llm = require('./llm');
 
 const SEED_PATH = path.join(__dirname, '..', 'config', 'directions.default.json');
 const SEED = JSON.parse(fs.readFileSync(SEED_PATH, 'utf8'));
 
-const SYSTEM_PROMPT = `You are a B2B go-to-market strategist configuring a lead-generation and sales-automation platform for a newly registered company. \
-Given the company's name, industry, website, home market and their own description of what they do and what they want from the tool, produce a complete JSON "directions" profile that will drive: which prospects to search for, how to score them, what tone/sequence to use in outreach, and what brand voice/sales narrative to use when generating pitches, ads, and social content for THIS company specifically.
+const SYSTEM_PROMPT = `You are a go-to-market strategist at an AI lead-generation agency, configuring the agency's platform for one business. \
+The business is either the AGENCY itself (its leads are businesses that could hire the agency) or one of the agency's CLIENTS (its leads are that client's prospective customers - companies for a B2B client, individual people for a B2C client such as a dental practice). \
+Given the business's name, industry, website, home market, its own description and (if provided) its uploaded business profile document, produce a complete JSON "directions" profile that will drive: which leads to search for, how to score them, what tone/sequence to use in outreach, and what brand voice/sales narrative to use when generating pitches, ads, and social content for THIS business specifically.
 
 Rules:
 - Write ONLY valid JSON matching the exact shape given in the user message's "SHAPE" block. No markdown, no preamble, no comments.
@@ -107,37 +104,11 @@ function shapeTemplate() {
   };
 }
 
-async function callModel(system, user) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: 1800,
-      temperature: 0.6,
-      system,
-      messages: [{ role: 'user', content: user }]
-    })
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Anthropic API error ${res.status}: ${text}`);
-  }
-  const data = await res.json();
-  const textBlock = (data.content || []).find(b => b.type === 'text');
-  if (!textBlock) throw new Error('No text content returned from model');
-  const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
-  return JSON.parse(cleaned);
-}
-
 /** Very small keyword heuristics used only when there's no LLM available. */
 const INDUSTRY_KEYWORDS = {
   software: ['software', 'saas', 'app', 'platform', 'tech'],
   fintech: ['fintech', 'payments', 'lending', 'bank', 'finance'],
+  dental: ['dental', 'dentist', 'orthodont', 'teeth'],
   healthtech: ['health', 'clinic', 'hospital', 'medical', 'pharma'],
   agritech: ['farm', 'agri', 'poultry', 'crop', 'livestock'],
   ecommerce: ['ecommerce', 'e-commerce', 'retail', 'shop', 'store'],
@@ -152,10 +123,15 @@ function guessIndustries(text) {
   return hits.length ? hits : ['professional_services'];
 }
 
-function localFallbackProfile({ name, description = '', industry, website, homeCountry, homeCity }) {
-  const blob = `${description} ${industry || ''}`;
-  const industries = industry ? [industry.toLowerCase()] : guessIndustries(blob);
+function localFallbackProfile({ name, description = '', industry, website, homeCountry, homeCity, kind, targetMarket, businessProfileText }) {
+  const blob = `${description} ${industry || ''} ${(businessProfileText || '').slice(0, 4000)}`;
+  const industries = kind === 'agency'
+    ? ['dentists', 'medical clinics', 'real estate', 'hospitality', 'professional_services']
+    : industry ? [industry.toLowerCase()] : guessIndustries(blob);
   const shape = shapeTemplate();
+  const targetTitles = kind === 'agency' || targetMarket !== 'b2c'
+    ? ['owner', 'founder', 'managing director', 'practice manager', 'marketing manager']
+    : ['individual'];
   return {
     ...shape,
     sender: {
@@ -171,7 +147,7 @@ function localFallbackProfile({ name, description = '', industry, website, homeC
     idealCustomerProfile: {
       ...shape.idealCustomerProfile,
       industries,
-      targetTitles: ['ceo', 'founder', 'managing director', 'head of operations', 'procurement manager']
+      targetTitles
     },
     geoStrategy: {
       ...shape.geoStrategy,
@@ -199,29 +175,33 @@ function localFallbackProfile({ name, description = '', industry, website, homeC
 }
 
 /**
- * @param {object} company - { name, description, industry, website, homeCountry, homeCity }
+ * @param {object} company - { name, description, industry, website, homeCountry, homeCity,
+ *   kind: 'agency'|'client', targetMarket: 'b2b'|'b2c', businessProfileText? }
  * @returns {Promise<object>} full directions/profile JSON, ready to store in companies.ai_profile_json
  */
 async function generateCompanyProfile(company) {
-  if (USE_MOCK) return localFallbackProfile(company);
+  if (!llm.enabled()) return localFallbackProfile(company);
 
-  const user = `COMPANY:
+  const role = company.kind === 'client'
+    ? `a CLIENT of the agency. Its leads are its prospective ${company.targetMarket === 'b2c' ? 'customers as individual PEOPLE (B2C) - targetTitles should describe the people (e.g. "parents in Westlands"), industries their context' : 'customers as COMPANIES (B2B)'}.`
+    : 'the AGENCY itself. Its leads are businesses that could hire it for paid advertising, appointment setting and AI automation - favour high-demand, repeat-purchase local markets (e.g. dentists, clinics, salons).';
+  const user = `BUSINESS (${role})
 Name: ${company.name}
 Industry (as given, may be blank): ${company.industry || '(not specified - infer from description)'}
 Website: ${company.website || '(none given)'}
 Home market: ${company.homeCity || ''}, ${company.homeCountry || 'Kenya'}
 
-DESCRIPTION (what they do and what they want from this tool, in their own words):
+DESCRIPTION (what they do and what they want, in their own words):
 ${company.description || '(no description given - make reasonable, clearly-generic-labeled assumptions)'}
-
-SHAPE (fill every field with content specific to this company, keep the exact keys/structure):
+${company.businessProfileText ? `\nUPLOADED BUSINESS PROFILE DOCUMENT (extracted text):\n${company.businessProfileText.slice(0, 60000)}\n` : ''}
+SHAPE (fill every field with content specific to this business, keep the exact keys/structure):
 ${JSON.stringify(shapeTemplate(), null, 2)}
 
 Return the filled JSON now.`;
 
   try {
-    const profile = await callModel(SYSTEM_PROMPT, user);
-    return { ...profile, _generatedBy: 'anthropic:' + ANTHROPIC_MODEL };
+    const profile = await llm.completeJson({ system: SYSTEM_PROMPT, user, effort: 'medium' });
+    return { ...llm.withFallback(profile, localFallbackProfile(company)), _generatedBy: 'anthropic:' + llm.MODEL };
   } catch (err) {
     console.warn(`[companyProfileService] AI profiling failed (${err.message}), falling back to heuristic profile.`);
     return localFallbackProfile(company);

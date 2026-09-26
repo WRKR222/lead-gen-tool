@@ -75,4 +75,40 @@ function parseLeadsCsv(csvText) {
   return { leads, errors };
 }
 
-module.exports = { parseLeadsCsv, KNOWN_COLUMNS };
+// Header aliases for spreadsheets exported from scraping tools, Google
+// sweeps, ad lead forms or CRMs (Excel or CSV, keyed by lower-cased header).
+const LEAD_ALIASES = {
+  companyName: ['company_name', 'company', 'business', 'business name', 'organisation', 'organization'],
+  contactName: ['contact_name', 'contact', 'name', 'full name', 'full_name', 'owner', 'decision maker'],
+  title: ['title', 'role', 'position', 'job title'],
+  email: ['email', 'e-mail', 'email address'],
+  phone: ['phone', 'mobile', 'tel', 'telephone', 'phone number'],
+  website: ['website', 'site', 'url', 'web'],
+  address: ['address', 'location', 'street', 'physical address'],
+  city: ['city', 'town'],
+  country: ['country', 'country code'],
+  industry: ['industry', 'category', 'niche', 'sector'],
+  companySize: ['company_size', 'employees', 'size', 'staff'],
+  leadType: ['lead_type', 'type'],
+  notes: ['notes', 'description', 'comment']
+};
+const SOCIAL_ALIASES = {
+  whatsapp: ['whatsapp'], instagram: ['instagram', 'ig'], facebook: ['facebook', 'fb'], linkedin: ['linkedin', 'linkedin_url'],
+  tiktok: ['tiktok'], x: ['x', 'twitter']
+};
+
+function first(row, keys) {
+  for (const k of keys) if (row[k] != null && String(row[k]).trim() !== '') return String(row[k]).trim();
+  return null;
+}
+
+/** Map one spreadsheet row to the lead shape leadsService.createLead expects. */
+function mapLeadRow(row) {
+  const lead = Object.fromEntries(Object.entries(LEAD_ALIASES).map(([k, keys]) => [k, first(row, keys)]));
+  lead.companySize = lead.companySize ? Number(String(lead.companySize).replace(/[^\d]/g, '')) || null : null;
+  lead.leadType = /person|individual|b2c|patient|consumer/i.test(lead.leadType || '') || (!lead.companyName && lead.contactName) ? 'person' : 'business';
+  lead.socials = Object.fromEntries(Object.entries(SOCIAL_ALIASES).map(([k, keys]) => [k, first(row, keys)]).filter(([, v]) => v));
+  return lead;
+}
+
+module.exports = { parseLeadsCsv, parseCsv, mapLeadRow, KNOWN_COLUMNS };

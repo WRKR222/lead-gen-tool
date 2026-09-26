@@ -105,4 +105,4 @@ function normalizeContact(p) {
   };
 }
 
-module.exports = { searchCompanies, searchContacts, enrichCompany, enrichContact };
+module.exports = { searchCompanies, searchContacts, enrichCompany, enrichContact, isMock: () => MOCK_MODE };

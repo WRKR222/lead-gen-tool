@@ -143,28 +143,40 @@ function recordSend(companyId) {
  * { subject, body, angle }. The unsubscribe link/header is appended here
  * (not by the model) so it is always present and always correct.
  */
-async function sendGeneratedToLead(companyId, lead, generated, fromName, fromEmail) {
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/**
+ * Send one email on behalf of `companyId`. The unsubscribe link/header is
+ * appended here (not by the model) so it is always present and correct.
+ * `fromEmail` must be a real mailbox address; anything else falls back to
+ * FROM_EMAIL. Pass `inReplyTo` to thread a reply.
+ */
+async function sendGeneratedToLead(companyId, lead, generated, fromName, fromEmail, { inReplyTo } = {}) {
   if (!lead.email) return { status: 'skipped_no_email' };
   if (isSuppressed(companyId, lead.email)) return { status: 'skipped_suppressed' };
   if (!withinRateLimit(companyId)) return { status: 'skipped_rate_limited' };
 
   const transport = await getTransport();
   const unsubUrl = unsubscribeUrl(companyId, lead.email);
+  const sender = fromEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail) ? fromEmail : (process.env.FROM_EMAIL || 'demo@example.com');
 
   const info = await transport.sendMail({
-    from: `"${fromName || process.env.FROM_NAME || 'Demo Sender'}" <${fromEmail || process.env.FROM_EMAIL || 'demo@example.com'}>`,
+    from: `"${(fromName || process.env.FROM_NAME || 'Demo Sender').replace(/"/g, '')}" <${sender}>`,
     to: lead.email,
     subject: generated.subject,
     text: `${generated.body}\n\n---\nUnsubscribe: ${unsubUrl}`,
-    html: `<div>${generated.body.replace(/\n/g, '<br/>')}</div><p style="font-size:12px;color:#888">\
+    html: `<div>${escapeHtml(generated.body).replace(/\n/g, '<br/>')}</div><p style="font-size:12px;color:#888">\
       <a href="${unsubUrl}">Unsubscribe</a></p>`,
-    headers: { 'List-Unsubscribe': `<${unsubUrl}>` }
+    headers: { 'List-Unsubscribe': `<${unsubUrl}>` },
+    ...(inReplyTo ? { inReplyTo, references: inReplyTo } : {})
   });
 
   recordSend(companyId);
   const previewUrl = (!process.env.SMTP_HOST && !info.__stub) ? nodemailer.getTestMessageUrl(info) : null;
   if (previewUrl) console.log(`[demo mode] Preview this email: ${previewUrl}`);
-  return { status: 'sent', previewUrl };
+  return { status: 'sent', previewUrl, messageId: info.messageId || null, from: sender };
 }
 
 module.exports = { sendGeneratedToLead, isSuppressed, suppress, unsubscribeUrl, unsubscribeToken, withinRateLimit, getEffectiveDailyCap };

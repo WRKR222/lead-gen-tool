@@ -3,59 +3,102 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Register your company — Chunguza Growth Platform</title>
+<title>Register — Chunguza</title>
 <link rel="stylesheet" href="ds.css" />
 <style>
   html, body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); min-height: 100vh; }
-  .wrap { max-width: 620px; margin: 0 auto; padding: 56px 20px 80px; }
-  .mark { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--color-accent);
-    border-radius: 8px; color: var(--color-accent); font-size: 13px; font-weight: 600; margin-bottom: 18px; }
-  h1 { font-size: 28px; margin-bottom: 6px; }
-  p.lede { color: color-mix(in srgb, var(--color-text) 65%, transparent); font-size: 14px; margin-bottom: 30px; max-width: 52ch; }
-  .section { margin-bottom: 26px; padding-bottom: 26px; border-bottom: 1px solid var(--color-divider); }
+  .wrap { max-width: 660px; margin: 0 auto; padding: 48px 20px 80px; }
+  .mark { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--color-accent); border-radius: 8px; color: var(--color-accent); font-size: 13px; font-weight: 600; }
+  h1 { font-size: 28px; margin: 18px 0 6px; }
+  p.lede { color: color-mix(in srgb, var(--color-text) 65%, transparent); font-size: 14px; margin-bottom: 26px; max-width: 58ch; }
+  .section { margin-bottom: 24px; padding-bottom: 22px; border-bottom: 1px solid var(--color-divider); }
   .section:last-of-type { border-bottom: none; }
   h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-accent-300); margin-bottom: 14px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
   .field { margin-bottom: 14px; }
   .hint { font-size: 12px; color: color-mix(in srgb, var(--color-text) 50%, transparent); margin-top: 4px; }
   .err { color: #ff9a9a; font-size: 13px; margin: 10px 0 0; min-height: 18px; white-space: pre-wrap; }
   .foot { margin-top: 20px; font-size: 13px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
   .foot a { color: var(--color-accent-300); }
   .loading-note { font-size: 12px; color: var(--color-accent-300); margin-top: 10px; }
+  .types { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
+  .type { padding: 14px; border-radius: var(--radius-lg); background: var(--color-surface); cursor: pointer; box-shadow: inset 0 0 0 1px var(--color-divider); }
+  .type:has(input:checked) { box-shadow: inset 0 0 0 1px var(--color-accent); }
+  .type input { accent-color: var(--color-accent); }
+  .type b { display: block; margin: 4px 0 2px; }
+  .type span { font-size: 12.5px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .checks label { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; cursor: pointer; }
+  .checks input { accent-color: var(--color-accent); }
+  .ok { color: #9be89b; font-size: 12px; margin-top: 4px; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <span class="logo-mark" style="width:28px;height:28px;margin-bottom:18px;">
+  <span class="logo-mark" style="width:28px;height:28px;">
     <span class="mark" data-logo-fallback>C</span>
     <canvas data-chunguza-logo="mark" aria-hidden="true"></canvas>
   </span>
-  <h1>Register your company</h1>
-  <p class="lede">Tell us what your company does and what you want from this tool. Our AI reads that and builds your company's own ideal-customer profile, geo strategy, outreach tone and sales narrative automatically — every company that signs up gets a tool tuned to itself, not a generic template.</p>
+  <h1>Create your workspace</h1>
+  <p class="lede">Describe the business and upload its profile - our AI builds the ideal-customer profile, a value pyramid priced in the local currency, a growth plan and the outreach voice automatically.</p>
 
   <form id="form">
+    <div class="types">
+      <label class="type"><input type="radio" name="accountType" value="client" checked /> <b>A business hiring Chunguza</b><span>Get leads, booked appointments and AI systems for your company.</span></label>
+      <label class="type"><input type="radio" name="accountType" value="agency" /> <b>An agency team</b><span>Find, sign and manage clients, and generate leads for each of them.</span></label>
+    </div>
+
+    <div class="section" id="agencySection">
+      <h2>Your agency</h2>
+      <div class="field"><label for="agencyCode">Agency code (from your signup link)</label><input class="input" id="agencyCode" placeholder="Leave blank if you have one agency" />
+        <p class="hint" id="agencyHint">If your agency sent you a link, this is filled in for you.</p></div>
+    </div>
+
     <div class="section">
-      <h2>Company</h2>
-      <div class="field"><label for="companyName">Company name</label><input class="input" id="companyName" required /></div>
+      <h2>Business</h2>
+      <div class="field"><label for="companyName">Business name</label><input class="input" id="companyName" required /></div>
       <div class="field">
-        <label for="description">What does your company do, and what do you want from this tool?</label>
-        <textarea class="input" id="description" rows="5" required placeholder="e.g. We run a boutique BnB brand in Nairobi. We want to find corporate travel managers and event planners across Kenya and East Africa who book accommodation for teams, and automate the first few rounds of outreach and follow-up."></textarea>
-        <p class="hint">The more specific, the better your AI profile will be. You can regenerate this later from Settings.</p>
+        <label for="description" id="descLabel">What does the business do, and what do you want from Chunguza?</label>
+        <textarea class="input" id="description" rows="5" required placeholder="e.g. We are a family dental clinic in Westlands. We want 40 new patients a month for cleaning, whitening and Invisalign, and help booking them in."></textarea>
+        <p class="hint">The more specific, the better. You can refine everything later in Settings.</p>
+      </div>
+      <div class="field"><label for="profile">Business profile (Word .docx or PDF, optional)</label><input class="input" type="file" id="profile" accept=".docx,.pdf,.txt" />
+        <p class="hint">Services, prices, customers, locations - the AI reads it for a much sharper profile and value pyramid.</p></div>
+      <div class="row">
+        <div class="field"><label for="industry">Industry</label><input class="input" id="industry" placeholder="e.g. dental" /></div>
+        <div class="field"><label for="website">Website</label><input class="input" id="website" placeholder="https://" /></div>
       </div>
       <div class="row">
-        <div class="field"><label for="industry">Industry (optional)</label><input class="input" id="industry" placeholder="e.g. hospitality" /></div>
-        <div class="field"><label for="website">Website (optional)</label><input class="input" id="website" placeholder="https://" /></div>
-      </div>
-      <div class="row">
-        <div class="field"><label for="homeCountry">Home country</label>
+        <div class="field"><label for="homeCountry">Country (sets the currency)</label>
           <select class="input" id="homeCountry">
-            <option value="KE" selected>Kenya</option><option value="UG">Uganda</option><option value="TZ">Tanzania</option>
-            <option value="RW">Rwanda</option><option value="NG">Nigeria</option><option value="ZA">South Africa</option>
-            <option value="US">United States</option><option value="GB">United Kingdom</option>
+            <option value="KE" selected>Kenya (KES)</option><option value="UG">Uganda (UGX)</option><option value="TZ">Tanzania (TZS)</option><option value="RW">Rwanda (RWF)</option>
+            <option value="ET">Ethiopia (ETB)</option><option value="NG">Nigeria (NGN)</option><option value="GH">Ghana (GHS)</option><option value="ZA">South Africa (ZAR)</option>
+            <option value="EG">Egypt (EGP)</option><option value="AE">United Arab Emirates (AED)</option><option value="US">United States (USD)</option><option value="GB">United Kingdom (GBP)</option>
+            <option value="DE">Germany (EUR)</option><option value="IN">India (INR)</option><option value="CA">Canada (CAD)</option><option value="AU">Australia (AUD)</option>
           </select>
         </div>
-        <div class="field"><label for="homeCity">Home city</label><input class="input" id="homeCity" value="Nairobi" /></div>
+        <div class="field"><label for="homeCity">City</label><input class="input" id="homeCity" value="Nairobi" /></div>
       </div>
+    </div>
+
+    <div class="section" id="clientSection">
+      <h2>What you need</h2>
+      <div class="field"><label>Your customers are</label><div class="checks">
+        <label><input type="radio" name="targetMarket" value="b2c" /> People (e.g. patients, diners, students)</label>
+        <label><input type="radio" name="targetMarket" value="b2b" checked /> Other businesses</label></div></div>
+      <div class="field"><label>Services</label><div class="checks">
+        <label><input type="checkbox" name="services" value="paid_advertising" checked /> Paid advertising</label>
+        <label><input type="checkbox" name="services" value="appointment_setting" checked /> Appointment setting</label>
+        <label><input type="checkbox" name="services" value="ai_automation" checked /> AI automation</label></div></div>
+      <div class="field"><label>One ad platform to start with</label><div class="checks">
+        <label><input type="radio" name="adPlatform" value="meta" checked /> Meta (Facebook & Instagram)</label>
+        <label><input type="radio" name="adPlatform" value="google_ads" /> Google Ads</label>
+        <label><input type="radio" name="adPlatform" value="youtube" /> YouTube</label>
+        <label><input type="radio" name="adPlatform" value="tiktok" /> TikTok</label></div></div>
+      <div class="field"><label for="baseline">How many customers do you have today? (optional)</label><input class="input" type="number" min="0" id="baseline" style="max-width:200px" />
+        <p class="hint">Used to track churn. You can import the full customer list later.</p></div>
     </div>
 
     <div class="section">
@@ -68,7 +111,7 @@
     </div>
 
     <button class="btn btn-primary btn-block" type="submit" id="submit">Create workspace</button>
-    <p class="loading-note" id="loadingNote" hidden>Building your AI profile — this takes a few seconds…</p>
+    <p class="loading-note" id="loadingNote" hidden>Reading your profile and building your AI setup - this takes a few seconds…</p>
     <p class="err" id="err"></p>
   </form>
   <p class="foot">Already registered? <a href="/login.html">Log in</a></p>
@@ -82,25 +125,69 @@
 <script type="module" src="/js/logoViewer.js"></script>
 <script src="shared.js"></script>
 <script>
-  const form = document.getElementById('form'), err = document.getElementById('err'), submit = document.getElementById('submit'), loadingNote = document.getElementById('loadingNote');
+  const $ = (id) => document.getElementById(id);
+  const form = $('form'), err = $('err'), submit = $('submit'), loadingNote = $('loadingNote');
   if (getAuth()) window.location.href = '/app.html';
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('type') === 'agency') document.querySelector('input[value="agency"]').checked = true;
+  if (params.get('agency')) { $('agencyCode').value = params.get('agency'); checkAgency(); }
+
+  function syncType() {
+    const agency = document.querySelector('input[name="accountType"]:checked').value === 'agency';
+    $('agencySection').hidden = agency;
+    $('clientSection').hidden = agency;
+    $('descLabel').textContent = agency ? 'What does your agency do, and who do you serve?' : 'What does the business do, and what do you want from Chunguza?';
+    $('description').placeholder = agency ? 'e.g. AI lead generation agency in Nairobi - paid ads, appointment setting and AI automation for dentists, clinics and local businesses.' : 'e.g. We are a family dental clinic in Westlands. We want 40 new patients a month for cleaning, whitening and Invisalign, and help booking them in.';
+  }
+  document.querySelectorAll('input[name="accountType"]').forEach(r => r.addEventListener('change', syncType));
+  syncType();
+
+  async function checkAgency() {
+    const code = $('agencyCode').value.trim();
+    const hint = $('agencyHint');
+    if (!code) { hint.className = 'hint'; hint.textContent = 'If your agency sent you a link, this is filled in for you.'; return; }
+    try { const a = await api('/auth/agency/' + encodeURIComponent(code), { auth: false }); hint.className = 'ok'; hint.textContent = '✓ Registering as a client of ' + a.name; }
+    catch { hint.className = 'err'; hint.textContent = 'Agency code not recognised - check your signup link.'; }
+  }
+  $('agencyCode').addEventListener('change', checkAgency);
+
+  function readFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve(undefined);
+      if (file.size > 12 * 1024 * 1024) return reject(new Error('The business profile is larger than 12 MB'));
+      const r = new FileReader();
+      r.onload = () => resolve({ filename: file.name, base64: String(r.result).split(',')[1] || '' });
+      r.onerror = () => reject(new Error('Could not read the business profile file'));
+      r.readAsDataURL(file);
+    });
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     err.textContent = ''; submit.disabled = true; submit.textContent = 'Creating…'; loadingNote.hidden = false;
     try {
+      const accountType = document.querySelector('input[name="accountType"]:checked').value;
       const data = await api('/auth/register', { auth: false, method: 'POST', body: {
-        companyName: document.getElementById('companyName').value,
-        description: document.getElementById('description').value,
-        industry: document.getElementById('industry').value || undefined,
-        website: document.getElementById('website').value || undefined,
-        homeCountry: document.getElementById('homeCountry').value,
-        homeCity: document.getElementById('homeCity').value,
-        ownerName: document.getElementById('ownerName').value,
-        email: document.getElementById('email').value,
-        password: document.getElementById('password').value
+        accountType,
+        agencyCode: accountType === 'client' ? ($('agencyCode').value.trim() || undefined) : undefined,
+        companyName: $('companyName').value,
+        description: $('description').value,
+        industry: $('industry').value || undefined,
+        website: $('website').value || undefined,
+        homeCountry: $('homeCountry').value,
+        homeCity: $('homeCity').value,
+        targetMarket: accountType === 'client' ? document.querySelector('input[name="targetMarket"]:checked').value : undefined,
+        services: accountType === 'client' ? [...document.querySelectorAll('input[name="services"]:checked')].map(i => i.value) : undefined,
+        adPlatform: accountType === 'client' ? document.querySelector('input[name="adPlatform"]:checked').value : undefined,
+        baselineCustomerCount: accountType === 'client' && $('baseline').value !== '' ? Number($('baseline').value) : undefined,
+        businessProfile: await readFile($('profile').files[0]),
+        ownerName: $('ownerName').value,
+        email: $('email').value,
+        password: $('password').value
       } });
       setAuth({ token: data.token, user: data.user });
-      window.location.href = '/app.html?onboarded=1';
+      window.location.href = '/app.html#/overview';
     } catch (ex) {
       err.textContent = ex.message; submit.disabled = false; submit.textContent = 'Create workspace'; loadingNote.hidden = true;
     }

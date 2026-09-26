@@ -4,6 +4,7 @@ const { db } = require('../db/database');
 const email = require('../services/emailService');
 const generator = require('../services/emailGenerationService');
 const { getDirections } = require('../services/directionsService');
+const leadsService = require('../services/leadsService');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -144,12 +145,7 @@ router.get('/:id', (req, res) => {
 
 function loadLead(id, companyId) {
   const l = db.prepare('SELECT * FROM leads WHERE id = ? AND company_id = ?').get(id, companyId);
-  if (!l) return null;
-  return {
-    id: l.id, email: l.email, contactName: l.contact_name, title: l.title,
-    companyName: l.company_name, industry: l.industry, city: l.city,
-    country: l.country, companySize: l.company_size
-  };
+  return l ? leadsService.toLeadShape(l) : null;
 }
 
 module.exports = router;

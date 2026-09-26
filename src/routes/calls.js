@@ -3,6 +3,8 @@ const { v4: uuid } = require('uuid');
 const { db } = require('../db/database');
 const callsService = require('../services/callsService');
 const tasksService = require('../services/tasksService');
+const leadsService = require('../services/leadsService');
+const outreach = require('../services/outreachService');
 const { getDirections } = require('../services/directionsService');
 const { requireAuth } = require('../middleware/auth');
 
@@ -15,6 +17,11 @@ router.use(requireAuth);
 const FOLLOW_UP_DAYS = {
   no_answer: 1, voicemail: 2, callback_requested: 1, interested: 3, wrong_number: null,
   not_interested: null, meeting_booked: null // a meeting was already booked - no separate follow-up needed
+};
+
+const CALL_RESULT = {
+  interested: 'interested', not_interested: 'said_no', callback_requested: 'callback_requested', meeting_booked: 'meeting_booked',
+  no_answer: 'no_answer', voicemail: 'sent', wrong_number: 'wrong_contact'
 };
 
 function loadLead(id, companyId) {
@@ -59,18 +66,16 @@ router.post('/', async (req, res) => {
     if (outcome && FOLLOW_UP_DAYS[outcome]) {
       const dueAt = new Date(Date.now() + FOLLOW_UP_DAYS[outcome] * 86400000).toISOString();
       followUpTask = tasksService.createTask(companyId, {
-        leadId, title: `Follow up with ${lead.company_name}${lead.contact_name ? ' (' + lead.contact_name + ')' : ''}`,
+        leadId, title: `Follow up with ${leadsService.displayName(lead)}${lead.contact_name && lead.company_name ? ' (' + lead.contact_name + ')' : ''}`,
         description: `Auto-created from call outcome "${outcome}".`, priority: outcome === 'interested' ? 'high' : 'normal',
         dueAt, createdBy: 'ai_assistant'
       });
       db.prepare('UPDATE calls SET follow_up_task_id = ? WHERE id = ?').run(followUpTask.id, id);
     }
-    if (outcome === 'meeting_booked') {
-      db.prepare("UPDATE leads SET status = 'meeting_booked', updated_at = datetime('now') WHERE id = ?").run(leadId);
-    } else if (outcome === 'interested' || outcome === 'callback_requested') {
-      db.prepare("UPDATE leads SET status = 'contacted', updated_at = datetime('now') WHERE id = ?").run(leadId);
-    } else if (outcome === 'not_interested') {
-      db.prepare("UPDATE leads SET status = 'closed_lost', updated_at = datetime('now') WHERE id = ?").run(leadId);
+    // Every logged call is also an outreach attempt (cold_call), so it moves the
+    // lead's pipeline, feeds the cadence and shows up in method analytics.
+    if (outcome && CALL_RESULT[outcome]) {
+      outreach.recordAttempt(companyId, req.auth.userId, { leadId, method: 'cold_call', channel: 'phone', result: CALL_RESULT[outcome], notes });
     }
 
     const call = db.prepare('SELECT * FROM calls WHERE id = ?').get(id);
@@ -90,11 +95,6 @@ router.get('/', (req, res) => {
   res.json(rows.map(c => ({ ...c, script_json: c.script_json ? JSON.parse(c.script_json) : null })));
 });
 
-function toLeadShape(l) {
-  return {
-    id: l.id, contactName: l.contact_name, title: l.title, companyName: l.company_name,
-    industry: l.industry, city: l.city, country: l.country, companySize: l.company_size
-  };
-}
+const toLeadShape = leadsService.toLeadShape;
 
 module.exports = router;
