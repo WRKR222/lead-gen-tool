@@ -1,134 +1,85 @@
 # Chunguza Growth Platform
 
-A multi-tenant, AI-personalized lead-generation and growth platform. Any
-company registers, describes what it does and what it wants from the tool,
-and an AI immediately synthesizes that company's own ideal-customer
-profile, geo strategy, scoring weights, outreach tone and sales narrative -
-so the tool behaves differently for every company, not as one generic
-template. From there, a company can:
+The operating system for **Chunguza, an AI lead-generation agency**. A business
+(Company X) hires Chunguza; Chunguza finds leads for X (other companies, or people
+such as dental patients), contacts them through the channels that work, books
+meetings with decision makers, and keeps X's customers from leaving.
 
-- Search for prospects **within Nairobi, nationally (Kenya), across East
-  Africa, Africa, or globally** - sourced from multiple providers in
-  parallel (Clay, Explorium/Vibe Prospecting, AI-assisted web research, and
-  CSV import), not locked to any one vendor.
-- Score every lead with a **self-improving model** that retrains on every
-  outcome you log (reply, meeting booked, closed won/lost, ...), per
-  company.
-- Run **AI cold-calling**: generates a call script (opener, discovery
-  questions, objection handling, close) per lead, logs outcomes, and
-  automatically creates follow-up tasks - like a sales manager coaching a
-  rep.
-- Send **AI-generated, per-lead-unique cold email campaigns** with
-  built-in compliance guardrails (unsubscribe, suppression, rate limits,
-  domain warm-up).
-- Use a **content studio**: sales pitches, ad ideas + ad copy, a rolling
-  social media content plan, on-brand graphics, and video-ad
-  concepts/storyboards (pluggable toward a real video-generation
-  provider).
-- Delegate to an **AI sales assistant** that can search leads, log calls,
-  create tasks, schedule meetings (with a real downloadable calendar
-  invite), draft emails, and generate content on its own - in chat, or
-  running autonomously on a schedule.
+Full product and design docs: [`docs/PRD.docx`](docs/PRD.docx),
+[`docs/Architecture_Plan_v3.docx`](docs/Architecture_Plan_v3.docx),
+[`docs/OOAD_Specification_v3.docx`](docs/OOAD_Specification_v3.docx).
+
+## What it does
+
+- **Two kinds of workspace.** The agency workspace finds and signs Chunguza's own
+  clients (stage 1 *find clients* → stage 2 *sign clients*). Each client gets a
+  workspace (stage 3 *get results*) that the agency opens from the top-bar switcher.
+  Client users only ever see their own workspace.
+- **Every lead is clickable** and holds all of its contact means (phones, emails,
+  WhatsApp, Instagram, Facebook, LinkedIn, TikTok, X, website, address), each
+  labelled with who it belongs to (owner, reception, main line).
+- **Ranked outreach methods**: door to door (best) → cold calling → multi-platform
+  digital → email & DMs (auto). Pick one or more, get AI guidance for each, record
+  the result against the five **meeting standards** (decision maker, straight to
+  the point with a hook, scarcity, never pitch before the meeting, a no before a yes).
+- **CPS meetings** (Attention → Identify → Solve → Cost): a brief is generated
+  on booking; the outcome, notes and quoted price are recorded.
+- **Outcomes**: converted / on the fence / said no (with a reason) / not responded.
+  A converted agency lead becomes a client in one click.
+- **Follow-up cadence** for non-responders (days 2, 4, 7, 14, 21; at most 4 touches
+  in 30 days; then nurture every 60 days), rotating to the strongest method not used
+  last. Emails go out automatically; other methods become tasks.
+- **Bulk email** (one template, merge fields) or a **bespoke AI email per lead**,
+  with unsubscribe, suppression, warm-up and rate limits.
+- **Real-time replies**: IMAP polling or a webhook. Each reply is matched to its lead
+  and classified, the bell and a toast fire live (SSE), and a bot drafts or sends a
+  reply that steers towards the meeting. Opt-out words always unsubscribe.
+- **Value pyramid** per workspace in the local currency (free value → lifetime
+  value), giving value per customer and per lead. **Growth plan** for the four-step
+  AI funnel on one ad platform.
+- **Business profile upload** (Word/PDF/text) for AI analysis. **Customers** by
+  count or Excel/CSV import; lost customers are registered with a reason.
+- **Analytics**: leads, meetings, methods, standards adherence, customer churn,
+  client churn and health, MRR, daily and monthly summaries. **AI learning**
+  suggests better methods from the loss reasons.
+- **Integrations**: HighLevel contact upsert and an Appointwise webhook. Carried over
+  from v2: the content studio and the tool-using AI assistant (it now logs attempts,
+  sets outcomes, lists due follow-ups and reads analytics).
+
+Every AI feature has a deterministic fallback, so the whole product works with no
+API key (or with `MOCK_MODE=true`).
 
 ## Architecture
 
 ```
 src/
-  server.js                     Express entrypoint, route wiring, optional autonomous-assistant loop
-  config/
-    directions.default.json     Fallback seed shape only - each company's real directions now live in the DB
-  middleware/
-    auth.js                     JWT verification -> req.auth = { userId, companyId, role }; role gate
+  server.js                 Express entrypoint, routers, JSON error handler, scheduler start
+  config/playbook.js        Single source of truth: stages, methods, results, standards, CPS, funnel, cadence
+  config/currencies.js      Country -> currency (+ approximate FX for fallback templates)
+  middleware/auth.js        JWT + workspace resolution (X-Workspace-Id) + role guards
   services/
-    authService.js              bcrypt + JWT
-    companyProfileService.js    AI: turns a company's description into its full directions profile (onboarding)
-    directionsService.js        Per-company directions read/write (companies.ai_profile_json)
-    geoExpansion.js             Named geo scopes (nairobi/kenya/east_africa/africa/global) + v1 auto-expansion tiers
-    leadSourceRegistry.js       Pluggable multi-source lead discovery (fan-out + merge)
-    clayService.js              Clay API wrapper
-    vibeProspectingService.js   Explorium/Vibe Prospecting API wrapper
-    webResearchLeadService.js   Licensed web-search API + AI extraction (not scraping)
-    csvImportService.js         Manual/CSV lead import
-    mockDataService.js          Zero-cost realistic fake data for every source, in demo mode
-    leadScoring.js              Online logistic-regression scorer, per company
-    emailGenerationService.js   Per-lead-unique cold email generation, aware of send history
-    emailService.js             SMTP sending, per-company suppression list, rate limiting, warm-up, unsubscribe
-    callsService.js             AI call-script generation
-    tasksService.js             Task CRUD (human- or AI-created)
-    meetingsService.js          Meeting scheduling + real .ics generation (calendar-API-ready)
-    assistantService.js         AI sales assistant: Anthropic tool-use agent loop + autonomous mode
-    contentService.js           Sales pitch / ad copy / social plan generation
-    imageGenerationService.js   Pluggable graphics generation (OpenAI Images, or local placeholder)
-    videoGenerationService.js   Pluggable video-ad generation (generic submit/poll job API, or storyboard fallback)
-  routes/
-    auth.js, companies.js       Registration (= onboarding), login, company/directions settings
-    leads.js                    Discover (geo-scoped, multi-source), list, CSV import, feedback
-    campaigns.js                Create/preview/send AI email campaigns
-    calls.js                    Call scripts, logging, auto follow-up tasks
-    tasks.js, meetings.js       Task and meeting CRUD, .ics download
-    assistant.js                AI assistant chat + autonomous run
-    content.js                  Content studio endpoints
-  db/
-    schema.sql, database.js, migrate.js   SQLite, multi-tenant (swap database.js for Postgres in production)
+    llm.js                  Anthropic SDK gateway (model, effort, refusal fallback, JSON helpers)
+    workspaceService.js     Agency/client workspaces, invites, health score, client churn
+    leadsService.js         Lead shape, contacts, detail, status
+    outreachService.js      Method preparation, attempts, outcomes
+    cadenceService.js       Follow-up policy; followUpService.js runs it; scheduler.js ticks it
+    bulkEmailService.js     Template/bespoke compose and rate-limited send
+    inboxService.js         Inbound match/classify/draft/auto-reply; imapPoller.js polls a mailbox
+    notificationService.js  Notifications + SSE pub/sub
+    customersService.js     Customers, import, lost/reactivate, churn stats
+    analyticsService.js     Workspace and agency analytics; insightsService.js does learning + summaries
+    valuePyramidService.js  Value pyramid; strategyService.js growth plan; meetingPrepService.js CPS brief
+    documentService.js      docx/pdf/xlsx/csv text extraction
+    integrationsService.js  HighLevel + Appointwise (SSRF-guarded)
+    ... v2 services (lead sources, scoring, email, calls, tasks, meetings, assistant, content)
+  routes/                   auth, workspaces, companies, leads, outreach, followups, inbox, inbound (public),
+                            notifications, customers, analytics, integrations, playbook, meetings + v2 routers
+  db/                       schema.sql, database.js (idempotent v2 -> v3 migration), migrate.js
 public/
-  index.html      Landing page
-  register.html   Registration = AI onboarding wizard
-  login.html      Login
-  app.html        Authenticated multi-tab dashboard (Leads / Calls / Tasks & Meetings / Content Studio / AI Assistant / Settings)
-  shared.js       Auth/session + API fetch helper shared by every page
+  app.html, css/app.css     App shell (workspace switcher, bell, sidebar, drawer)
+  js/app/                   core.js, charts.js, main.js (router, SSE) and views/*.js
+  index.html, register.html, login.html
 ```
-
-## How it satisfies each requirement
-
-- **Adaptable to any company, AI/ML-personalized**: registration
-  (`POST /api/auth/register`) takes a company's name and a free-text
-  description of what it does and wants, and `companyProfileService.js`
-  calls an LLM to synthesize a full directions profile (ICP, geo strategy,
-  scoring, outreach tone, brand voice, sales narrative) unique to that
-  company. Every other module - scoring, email generation, call scripts,
-  content studio, the AI assistant - reads from that per-company profile,
-  so the tool's behavior genuinely differs company to company. Re-run
-  anytime from Settings (`POST /api/companies/me/regenerate-profile`).
-- **Geo search (Nairobi / national / East Africa / Africa / global)**:
-  `geoExpansion.resolveScope()` + `POST /api/leads/discover` with
-  `{ geoScope }`. Falls back to v1's automatic home-country-then-widening
-  behavior when no explicit scope is given.
-- **Company name, contact info (email/phone/both), role**: every lead
-  source normalizes into one shape (`companyName`, `contactName`, `title`,
-  `email`, `phone`, `linkedinUrl`, location, industry, size); stored per
-  company in the `leads` table.
-- **Sources beyond Clay/vibe prospecting**: `leadSourceRegistry.js` fans a
-  discovery request out to every enabled source in parallel - Clay,
-  Explorium, AI-assisted web research (`webResearchLeadService.js`,
-  licensed search API + LLM extraction - not a LinkedIn/social-media
-  scraper, which would violate those platforms' Terms of Service), and
-  CSV import for lists a company already has the right to use. Adding
-  another provider (Apollo.io, Hunter.io, ZoomInfo, a licensed registry
-  feed, LinkedIn's own official APIs) is one file with the same interface.
-- **Cold calling + AI follow-up like a sales person**: `callsService.js`
-  generates a per-lead call script (opener, discovery questions, value
-  prop, objection handling, close); `routes/calls.js` logs outcomes and
-  automatically creates a follow-up task for outcomes that need one
-  (no-answer, voicemail, callback-requested, interested), the way a sales
-  manager would remind a rep.
-- **Custom bulk cold email, never repeated**: unchanged from v1's
-  `emailGenerationService.js`, now per-company - full history-awareness,
-  angle rotation, similarity guard - plus per-company suppression list,
-  rate limits and domain warm-up in `emailService.js`.
-- **Sales pitches, ad ideas, social media plan, graphics, video ads**:
-  `contentService.js` (text), `imageGenerationService.js` (graphics,
-  pluggable to OpenAI Images or any provider with the same shape),
-  `videoGenerationService.js` (video-ad concepts/storyboards, pluggable to
-  a real submit-and-poll video generation API once you have one - see the
-  file for why no provider is hardcoded). All generations are saved to
-  `content_assets` for reuse.
-- **AI assistant that can act automatically**: `assistantService.js` runs
-  an Anthropic tool-use loop bound to real functions - search leads, log
-  calls, create tasks, schedule meetings, draft emails, update lead
-  status, generate content. `POST /api/assistant/chat` for conversation;
-  `POST /api/assistant/run-autonomous` (or the optional in-process
-  scheduler via `AUTONOMOUS_ASSISTANT_ENABLED`) for it to review leads/
-  tasks/meetings and take useful actions with no one prompting it.
 
 ## Setup
 
@@ -172,32 +123,33 @@ action to take is exactly what the model is for.
 | Variable | Powers |
 |---|---|
 | `JWT_SECRET` | Required. Session auth. |
-| `ANTHROPIC_API_KEY` | Company AI profiling, per-lead email generation, call scripts, AI assistant, text content (pitch/ad copy/social plan). |
+| `ANTHROPIC_API_KEY` (+ optional `ANTHROPIC_MODEL`, default `claude-opus-5`) | Every AI feature: profiling, value pyramid, growth plan, outreach guidance, emails, CPS briefs, reply bot, learning, summaries, assistant, content. |
 | `CLAY_API_KEY` / `EXPLORIUM_API_KEY` | Lead sourcing from Clay / Explorium. |
 | `SERPAPI_API_KEY` or `BING_SEARCH_API_KEY` | Web-research lead sourcing. |
 | `SMTP_*`, `FROM_NAME`, `FROM_EMAIL` | Actually sending campaign emails (falls back to a free Ethereal.email sandbox, or a console-only stub with zero network). |
 | `OPENAI_API_KEY` (+`IMAGE_PROVIDER=openai`) | Real graphics generation (falls back to a generated placeholder graphic). |
 | `VIDEO_API_BASE`/`VIDEO_API_KEY` | Real video-ad generation (falls back to a text storyboard) - see `videoGenerationService.js` for wiring a specific provider. |
+| `IMAP_HOST`/`IMAP_USER`/`IMAP_PASS` (+`IMAP_PORT`, `IMAP_SECURE`, `IMAP_MAILBOX`, `IMAP_WORKSPACE_ID`) | Live reply detection by polling the mailbox that leads reply to. Alternative: point your email provider's inbound webhook at `POST /api/inbound/email/<workspace inbound token>` (shown in Settings). |
+| `HIGHLEVEL_API_KEY`, `HIGHLEVEL_LOCATION_ID` | Push leads to HighLevel (contact upsert). |
+| `APPOINTWISE_WEBHOOK_URL` | Hand leads to Appointwise (a per-workspace URL in Settings overrides it). |
 | `GOOGLE_CALENDAR_CLIENT_ID/SECRET` | Optional push-to-Google-Calendar (meetings always produce a working `.ics` invite with zero configuration). |
 
 See `.env.example` for the full list with explanations.
 
 ## Core workflow
 
-1. **Register** (`/register.html`) - company description in, AI-tuned
-   directions out, straight into the dashboard.
-2. **Leads tab** - pick a geo scope and click "Search prospects", or
-   import a CSV. Log outcomes to retrain the scorer.
-3. **Calls tab** - generate a script for a lead, make the call, log the
-   outcome - a follow-up task is created automatically when useful.
-4. **Tasks & Meetings tab** - track to-dos and scheduled meetings;
-   download the `.ics` invite for any meeting.
-5. **Content Studio tab** - generate a sales pitch, ad ideas/copy, a
-   14-day social plan, a graphic, or a video-ad concept in one click.
-6. **AI Assistant tab** - ask it anything about your leads, or click "Run
-   assistant now" to let it review your pipeline and act on its own.
-7. **Settings tab** - see and regenerate your company's AI profile at any
-   time as your positioning evolves.
+1. **Register the agency** at `/register.html?type=agency`. Clients sign up with the
+   agency's link (`/register.html?agency=<agency code>`), or the agency adds them
+   under **Clients** and creates their login with *Invite login*.
+2. **Find clients**: Leads → *Find leads* (niche + area), or import a list. Open a
+   lead, pick methods, *Prepare*, then record each attempt.
+3. **Sign clients**: book the meeting (a CPS brief is generated), record the outcome,
+   then *Sign as client*.
+4. **Get results**: switch to the client workspace. Upload the business profile,
+   review the value pyramid and growth plan, find or import leads, run outreach and
+   bulk email, and answer replies from **Inbox**.
+5. **Retain**: import customers and mark losses with a reason. Watch client health,
+   churn and the monthly summary under **Analytics**.
 
 ## Compliance - read before sending real bulk email
 
@@ -271,6 +223,14 @@ Then put nginx (`deploy/nginx.conf.example`) in front for TLS.
 - [ ] `MAX_EMAILS_PER_HOUR`/`MAX_EMAILS_PER_DAY` set conservatively at
       first per company.
 
+## Upgrading from v2
+
+Nothing to do: `node src/db/migrate.js` (run on every start) adds the v3 columns
+and tables, makes `leads.company_name` nullable (a one-time rebuild inside a
+transaction), and backfills currency, inbound tokens and lead contacts. Existing
+companies stay usable as stand-alone workspaces. After Chunguza registers its agency
+workspace, set `ALLOW_AGENCY_SIGNUP=false` so nobody else can create one.
+
 ## Upgrading from v1 (single-tenant)
 
 v1 had no `company_id` on any table. `src/db/database.js` detects an old
@@ -290,8 +250,9 @@ re-register your company and re-import/re-run discovery.
   (real call behind an env-configured key, mock fallback otherwise).
 - Give the AI assistant a new capability: add a tool definition + a case
   in `executeTool()` in `assistantService.js` - nothing else changes.
-- Swap the email/scoring LLM provider: edit `callModel()` in the relevant
-  service - the surrounding logic is provider-agnostic everywhere.
+- Change the model or AI behaviour in one place: `src/services/llm.js`
+  (model, effort, refusal fallback) and `src/config/playbook.js` (the rules
+  every prompt and template follows).
 
 ## Brand mark (3D logo)
 

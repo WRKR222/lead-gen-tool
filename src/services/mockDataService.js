@@ -49,7 +49,40 @@ function countryForTier(filters) {
  * respecting the same filters the real discovery flow would pass in
  * (country/continent/global tier, industries, company size, titles).
  */
+const STREETS = ['Moi Avenue', 'Kimathi Street', 'Ngong Road', 'Waiyaki Way', 'Kenyatta Avenue', 'Mombasa Road', 'Lenana Road', 'Riverside Drive'];
+const AREAS = { Nairobi: ['Westlands', 'Kilimani', 'CBD', 'Karen', 'Parklands', 'Lavington'], Mombasa: ['Nyali', 'Old Town', 'Bamburi'] };
+
+function socialsFor(slug, country, allChannels = true) {
+  const s = { whatsapp: fakePhone(country), instagram: `@${slug}` };
+  if (allChannels) Object.assign(s, { facebook: `https://facebook.com/${slug}`, tiktok: Math.random() < 0.5 ? `@${slug}` : null, x: Math.random() < 0.3 ? `@${slug}` : null });
+  return s;
+}
+
+function fakeAddress(city) {
+  const area = pick(AREAS[city] || ['Central']);
+  return `${Math.floor(1 + Math.random() * 200)} ${pick(STREETS)}, ${area}, ${city}`;
+}
+
+/** B2C: individual people as leads (e.g. prospective patients for a dental clinic). */
+function generateMockPersons(filters, count, sourceTag) {
+  const prospects = [];
+  for (let i = 0; i < count; i++) {
+    const country = countryForTier(filters);
+    const cityOptions = COUNTRY_CITY[country] || COUNTRY_CITY.US;
+    const [city] = (filters.city && cityOptions.find(c => c[0].toLowerCase() === filters.city.toLowerCase())) || pick(cityOptions);
+    const first = pick(FIRST_NAMES); const last = pick(LAST_NAMES);
+    const slug = `${first}.${last}`.toLowerCase();
+    prospects.push({
+      leadType: 'person', contactName: `${first} ${last}`, title: pick(['Parent', 'Professional', 'Business owner', 'Student', 'Retiree']),
+      email: `${slug}${Math.floor(Math.random() * 90 + 10)}@example.com`, phone: fakePhone(country), country, city,
+      address: fakeAddress(city), socials: socialsFor(slug.replace('.', '_'), country, false), industry: filters.industries?.[0] || null, source: sourceTag
+    });
+  }
+  return { businesses: [], prospects };
+}
+
 function generateMockEntities(filters, count = 8, sourceTag = 'mock') {
+  if (filters.targetMarket === 'b2c') return generateMockPersons(filters, count, sourceTag);
   const businesses = [];
   const prospects = [];
 
@@ -64,6 +97,7 @@ function generateMockEntities(filters, count = 8, sourceTag = 'mock') {
       (filters.companySizeMin || 10) + Math.random() * ((filters.companySizeMax || 500) - (filters.companySizeMin || 10))
     );
     const domain = companyName.toLowerCase().replace(/\s+/g, '') + '.example.com';
+    const slug = companyName.toLowerCase().replace(/\s+/g, '');
 
     businesses.push({
       companyName, domain, industry, companySize,
@@ -71,6 +105,7 @@ function generateMockEntities(filters, count = 8, sourceTag = 'mock') {
       latitude: lat + (Math.random() - 0.5) * 0.2,
       longitude: lng + (Math.random() - 0.5) * 0.2,
       phone: fakePhone(country),
+      website: `https://${domain}`, address: fakeAddress(city), socials: socialsFor(slug, country),
       source: sourceTag
     });
 

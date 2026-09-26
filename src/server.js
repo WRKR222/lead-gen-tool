@@ -16,17 +16,39 @@ const tasksRouter = require('./routes/tasks');
 const meetingsRouter = require('./routes/meetings');
 const assistantRouter = require('./routes/assistant');
 const contentRouter = require('./routes/content');
+const workspacesRouter = require('./routes/workspaces');
+const outreachRouter = require('./routes/outreach');
+const followupsRouter = require('./routes/followups');
+const inboxRouter = require('./routes/inbox');
+const inboundRouter = require('./routes/inbound');
+const notificationsRouter = require('./routes/notifications');
+const customersRouter = require('./routes/customers');
+const analyticsRouter = require('./routes/analytics');
+const integrationsRouter = require('./routes/integrations');
+const playbookRouter = require('./routes/playbook');
+const scheduler = require('./services/scheduler');
 
 migrate();
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+// Business profiles and customer spreadsheets arrive base64-encoded in JSON (12 MB file cap).
+app.use(express.json({ limit: '18mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/api/auth', authRouter);
 app.use('/api/companies', companiesRouter);
+app.use('/api/workspaces', workspacesRouter);
 app.use('/api/leads', leadsRouter);
+app.use('/api/outreach', outreachRouter);
+app.use('/api/followups', followupsRouter);
+app.use('/api/inbox', inboxRouter);
+app.use('/api/inbound', inboundRouter);
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/customers', customersRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/integrations', integrationsRouter);
+app.use('/api/playbook', playbookRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/tasks', tasksRouter);
@@ -65,6 +87,15 @@ if (process.env.AUTONOMOUS_ASSISTANT_ENABLED === 'true') {
   }, intervalMinutes * 60 * 1000);
   console.log(`[autonomous assistant] enabled, running every ${intervalMinutes} minute(s)`);
 }
+
+scheduler.start();
+
+// JSON errors (e.g. an oversized upload) instead of Express's HTML page.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.type === 'entity.too.large' ? 413 : err.status || 500;
+  res.status(status).json({ error: status === 413 ? 'Upload too large - keep files under 12 MB.' : err.message });
+});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Lead-gen & growth platform running on :${PORT}`));

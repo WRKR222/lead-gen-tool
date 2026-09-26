@@ -6,25 +6,15 @@
  * a company can browse and reuse past output instead of regenerating.
  * Same real-AI + mock-fallback pattern as the rest of the app.
  */
-const fetch = require('node-fetch');
 const { v4: uuid } = require('uuid');
 const { db } = require('../db/database');
+const llm = require('./llm');
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
-const USE_MOCK = !ANTHROPIC_API_KEY || process.env.MOCK_MODE === 'true';
+const USE_MOCK = !llm.enabled();
+const ANTHROPIC_MODEL = llm.MODEL;
 
-async function callModel(system, user, maxTokens = 1400) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: maxTokens, temperature: 0.75, system, messages: [{ role: 'user', content: user }] })
-  });
-  if (!res.ok) throw new Error(`Anthropic API error ${res.status}: ${await res.text().catch(() => '')}`);
-  const data = await res.json();
-  const textBlock = (data.content || []).find(b => b.type === 'text');
-  if (!textBlock) throw new Error('No text content returned from model');
-  return JSON.parse(textBlock.text.replace(/```json|```/g, '').trim());
+function callModel(system, user, maxTokens = 8000) {
+  return llm.completeJson({ system, user, effort: 'low', maxTokens: Math.max(maxTokens, 8000) });
 }
 
 function saveAsset(companyId, { leadId, type, provider, prompt, resultText, resultUrl, status }) {

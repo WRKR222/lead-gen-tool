@@ -56,3 +56,19 @@ services:
         value: 100
       - key: MAX_EMAILS_PER_DAY
         value: 500
+      - key: ALLOW_AGENCY_SIGNUP
+        value: "true"
+      - key: FOLLOWUP_ENGINE_ENABLED
+        value: "true"
+      - key: IMAP_HOST
+        sync: false
+      - key: IMAP_USER
+        sync: false
+      - key: IMAP_PASS
+        sync: false
+      - key: HIGHLEVEL_API_KEY
+        sync: false
+      - key: HIGHLEVEL_LOCATION_ID
+        sync: false
+      - key: APPOINTWISE_WEBHOOK_URL
+        sync: false

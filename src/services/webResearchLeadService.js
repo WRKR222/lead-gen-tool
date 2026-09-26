@@ -17,15 +17,14 @@
  */
 const fetch = require('node-fetch');
 const { generateMockEntities } = require('./mockDataService');
+const llm = require('./llm');
 
 const SEARCH_PROVIDER = process.env.SEARCH_PROVIDER || 'serpapi';
 const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY;
 const BING_SEARCH_API_KEY = process.env.BING_SEARCH_API_KEY;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 
 const HAS_SEARCH_KEY = (SEARCH_PROVIDER === 'serpapi' && SERPAPI_API_KEY) || (SEARCH_PROVIDER === 'bing' && BING_SEARCH_API_KEY);
-const MOCK_MODE = !HAS_SEARCH_KEY || !ANTHROPIC_API_KEY || process.env.MOCK_MODE === 'true';
+const MOCK_MODE = !HAS_SEARCH_KEY || !llm.enabled();
 
 function buildQuery(filters) {
   const parts = [];
@@ -65,17 +64,7 @@ FILTERS USED: ${JSON.stringify(filters)}
 SEARCH RESULTS:
 ${results.map((r, i) => `${i + 1}. ${r.title}\n${r.snippet}\n${r.url}`).join('\n\n')}`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: prompt }] })
-  });
-  if (!res.ok) throw new Error(`Anthropic extraction error ${res.status}`);
-  const data = await res.json();
-  const textBlock = (data.content || []).find(b => b.type === 'text');
-  if (!textBlock) throw new Error('No extraction returned');
-  const cleaned = textBlock.text.replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(cleaned);
+  const parsed = await llm.completeJson({ user: prompt, effort: 'low' });
   return {
     businesses: (parsed.businesses || []).map(b => ({ ...b, source: 'web_research' })),
     prospects: (parsed.prospects || []).map(p => ({ ...p, source: 'web_research' }))

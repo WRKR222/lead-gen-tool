@@ -3,3 +3,5 @@ node_modules/
 *.sqlite
 *.db
 dist/
+*.db-shm
+*.db-wal
