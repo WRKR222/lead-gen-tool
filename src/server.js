@@ -98,7 +98,23 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Lead-gen & growth platform running on :${PORT}`);
-  require('./db/database').describeStorage();
+  const { describeStorage, DB_PATH } = require('./db/database');
+  describeStorage();
+  require('./db/replication').startReplication(DB_PATH);
 });
+
+// Hosts stop the process with SIGTERM on deploys and idle spin-down: let the
+// backup flush its last changes before exiting.
+let shuttingDown = false;
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.close();
+    await require('./db/replication').stopReplication();
+    try { require('./db/database').db.close(); } catch (_) { /* already closed */ }
+    process.exit(0);
+  });
+}

@@ -197,6 +197,29 @@ proxy config (get a cert with `certbot --nginx -d yourdomain.com` first).
   persistent volume mounted at `/app/data`. Set every var from
   `.env.example` in the platform's environment/secrets UI.
 
+### Render free plan: keep your data without a disk
+
+Free Render services have no persistent disk, so the SQLite file is wiped on
+every deploy, restart and idle spin-down (accounts "stop working"). The app
+fixes this with [Litestream](https://litestream.io): `npm install` downloads it,
+startup restores the latest backup, and every change is streamed to
+S3-compatible storage within about a second (flushed on shutdown).
+
+1. Create a free [Backblaze B2](https://www.backblaze.com/cloud-storage) account,
+   then a **private** bucket (e.g. `chunguza-db`). Note its S3 endpoint, e.g.
+   `s3.us-west-004.backblazeb2.com`.
+2. *Application Keys → Add a New Application Key* with read/write access to that
+   bucket. Copy the `keyID` and `applicationKey` (shown once).
+3. In Render → your service → *Environment*, add:
+   `LITESTREAM_BUCKET`, `LITESTREAM_ENDPOINT` (`https://s3.us-west-004.backblazeb2.com`),
+   `LITESTREAM_REGION` (`us-west-004`), `LITESTREAM_ACCESS_KEY_ID` (keyID),
+   `LITESTREAM_SECRET_ACCESS_KEY` (applicationKey). Save; Render redeploys.
+4. The log should show `[db] ... backed up continuously to s3://...`. If the
+   settings are wrong, the deploy fails with a `[litestream] restore ... failed`
+   message instead of starting with an empty database.
+
+Any S3-compatible store works (Cloudflare R2, AWS S3); leave the endpoint empty for AWS.
+
 ### Option C - Plain VPS with PM2 (no Docker)
 
 ```bash

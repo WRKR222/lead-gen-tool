@@ -5,8 +5,13 @@ const Database = require('better-sqlite3');
 const DB_PATH = process.env.SQLITE_PATH || path.join(__dirname, '..', '..', 'data', 'leadgen.db');
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
+// On a fresh container, pull the latest Litestream backup before opening (no-op unless configured).
+const replication = require('./replication');
+replication.restoreIfNeeded(DB_PATH);
+
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
+db.pragma('busy_timeout = 5000'); // Litestream briefly holds locks while it copies the WAL
 db.pragma('foreign_keys = ON');
 
 /**
@@ -142,13 +147,14 @@ function describeStorage() {
   const dir = path.dirname(DB_PATH);
   let users = 0;
   try { users = db.prepare('SELECT COUNT(*) AS n FROM users').get().n; } catch (_) { /* before migrate */ }
-  console.log(`[db] ${DB_PATH} (${users} user account${users === 1 ? '' : 's'})`);
-  if (!process.env.RENDER) return;
+  const backup = replication.enabled() ? `, backed up continuously to ${replication.describe()}` : '';
+  console.log(`[db] ${DB_PATH} (${users} user account${users === 1 ? '' : 's'})${backup}`);
+  if (!process.env.RENDER || backup) return;
   let mounted = false;
   try { mounted = fs.statSync(dir).dev !== fs.statSync(path.dirname(dir)).dev; } catch (_) { /* treat as not mounted */ }
   if (!mounted) {
     console.warn(`[db] WARNING: ${dir} is not a persistent disk. Every deploy or restart starts with an EMPTY database. ` +
-      'Add a Render disk mounted at this folder (or set SQLITE_PATH to a file on your disk).');
+      'On the free plan set the LITESTREAM_* variables (free S3-compatible backup, see README); on a paid plan add a Render disk mounted at this folder.');
   }
 }
 
