@@ -51,9 +51,8 @@
     </div>
 
     <div class="section" id="agencySection">
-      <h2>Your agency</h2>
-      <div class="field"><label for="agencyCode">Agency code (from your signup link)</label><input class="input" id="agencyCode" placeholder="Leave blank if you have one agency" />
-        <p class="hint" id="agencyHint">If your agency sent you a link, this is filled in for you.</p></div>
+      <p class="hint" id="agencyHint">You'll be set up as a client of Chunguza. <a href="#" id="showCode">Invited by a different agency?</a></p>
+      <div class="field" id="codeField" hidden><label for="agencyCode">Agency code (the text after <code>?agency=</code> in the link the agency sent you)</label><input class="input" id="agencyCode" placeholder="e.g. chunguza-ab12c" /></div>
     </div>
 
     <div class="section">
@@ -146,11 +145,12 @@
   async function checkAgency() {
     const code = $('agencyCode').value.trim();
     const hint = $('agencyHint');
-    if (!code) { hint.className = 'hint'; hint.textContent = 'If your agency sent you a link, this is filled in for you.'; return; }
-    try { const a = await api('/auth/agency/' + encodeURIComponent(code), { auth: false }); hint.className = 'ok'; hint.textContent = '✓ Registering as a client of ' + a.name; }
-    catch { hint.className = 'err'; hint.textContent = 'Agency code not recognised - check your signup link.'; }
+    if (!code) { hint.className = 'hint'; hint.textContent = "You'll be set up as a client of Chunguza."; return; }
+    try { const a = await api('/auth/agency/' + encodeURIComponent(code), { auth: false }); hint.className = 'ok'; hint.textContent = "✓ You're signing up as a client of " + a.name; }
+    catch { hint.className = 'err'; hint.textContent = 'Agency code not recognised - check the link your agency sent you.'; $('codeField').hidden = false; }
   }
   $('agencyCode').addEventListener('change', checkAgency);
+  $('showCode').addEventListener('click', e => { e.preventDefault(); $('codeField').hidden = false; $('agencyCode').focus(); });
 
   function readFile(file) {
     return new Promise((resolve, reject) => {
