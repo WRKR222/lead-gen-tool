@@ -98,4 +98,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Lead-gen & growth platform running on :${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Lead-gen & growth platform running on :${PORT}`);
+  require('./db/database').describeStorage();
+});

@@ -133,4 +133,23 @@ function migrate() {
   backfillV3();
 }
 
-module.exports = { db, migrate, DB_PATH };
+/**
+ * One startup line saying where the data lives. On Render, a database that is
+ * not on a mounted disk is wiped on every deploy and restart (accounts vanish),
+ * so warn loudly in that case.
+ */
+function describeStorage() {
+  const dir = path.dirname(DB_PATH);
+  let users = 0;
+  try { users = db.prepare('SELECT COUNT(*) AS n FROM users').get().n; } catch (_) { /* before migrate */ }
+  console.log(`[db] ${DB_PATH} (${users} user account${users === 1 ? '' : 's'})`);
+  if (!process.env.RENDER) return;
+  let mounted = false;
+  try { mounted = fs.statSync(dir).dev !== fs.statSync(path.dirname(dir)).dev; } catch (_) { /* treat as not mounted */ }
+  if (!mounted) {
+    console.warn(`[db] WARNING: ${dir} is not a persistent disk. Every deploy or restart starts with an EMPTY database. ` +
+      'Add a Render disk mounted at this folder (or set SQLITE_PATH to a file on your disk).');
+  }
+}
+
+module.exports = { db, migrate, DB_PATH, describeStorage };
